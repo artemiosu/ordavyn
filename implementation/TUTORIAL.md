@@ -16,7 +16,7 @@ cd /tmp
 ```
 
 An sdist can be installed instead using `dist/ordavyn-0.1.0.tar.gz`. Both package
-formats include README and the unresolved licensing notice. Nothing is uploaded.
+formats include README and the standard Apache-2.0 license text. Nothing is uploaded.
 
 The first demo simulates one order and rejects its replay. The second exchanges
 authorized requests in both directions between two services. Both allocate ephemeral

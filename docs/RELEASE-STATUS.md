@@ -1,6 +1,6 @@
 # Ordavyn release status
 
-Local migration candidate only. Publication remains blocked by unresolved licensing
+Local migration candidate only. Publication remains blocked by unresolved provenance/attribution
 and the need for a separately approved public file set. No push or publication was
 performed; the local pre-push hook remains a blocking control.
 
@@ -20,7 +20,9 @@ real transactions or public network exposure is authorized.
 Verification evidence is retained in the excluded local implementation report.
 Passing tests is not a security audit, legal clearance or protocol certification.
 The original Apache text and conflicting Cargo declaration are preserved externally;
-see [PROVENANCE.md](PROVENANCE.md). No new license or copyright attribution was granted.
+see [PROVENANCE.md](PROVENANCE.md). On 2026-09-27 the owner selected Apache-2.0.
+Standard license files and package metadata now reflect that selection; no
+rights-holder identity was invented and no third-party rights were established.
 
 CBOR transport decoding, CBOR decoder resource-limit enforcement and streaming
 transport are unsupported. Rust CBOR depth/collection constants are proposed
@@ -33,7 +35,7 @@ rights, domain availability, or public package-name availability. Provenance,
 dependency and secret checks for the exact proposed public snapshot must still be
 completed. Public specifications and governance documents require separate curation
 and review. Earlier AD-15/AD-16 release conditions are not declared satisfied by this
-work. Licensing clarification and explicit owner publication approval do not replace
+work. The license selection and explicit owner publication approval do not replace
 these checks; no legal determination is made here.
 
 Deferred limitations B4/B6: grants are static local configuration, not a complete
@@ -48,3 +50,11 @@ sdist. Both demos and the SDK README example passed in both environments. Three
 BMAD review lenses were completed and accepted fixes were verified. The two
 deferred lifecycle limitations above remain open. These are local test results,
 not release approval or independent protocol certification.
+
+License-selection follow-up (2026-09-27): standard Apache-2.0 text was checked
+byte-for-byte in all four local LICENSE files, the rebuilt wheel and sdist.
+Wheel metadata declares Apache-2.0 and retains its private classifier; Cargo
+metadata declares Apache-2.0 and retains `publish = false`. The Rust package
+file list includes LICENSE. No runtime code changed; the behavioral test counts
+above refer to the preceding implementation verification, not a new test run.
+The pre-push hook is byte-for-byte unchanged.

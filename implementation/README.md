@@ -46,7 +46,8 @@ The conformance runner executes behavioral tests and reports unsupported feature
 explicitly; it is not conformance certification. Delegation, negotiation, PQ,
 TLS and durable replay protection are unsupported.
 
-Licensing is unresolved: `LICENSE` is a status notice, not a new license grant.
+The owner selected Apache-2.0 on 2026-09-27; `LICENSE` contains its standard text.
+Rights to inherited material and required attribution still need verification.
 See the repository's `docs/PROVENANCE.md` and `docs/RELEASE-STATUS.md` before any
 publication or redistribution. Private planning is intentionally absent from packages.
 

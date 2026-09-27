@@ -9,7 +9,7 @@ require explicit local permissions and reserve message/operation IDs before
 handlers run. They use bounded loopback HTTP/1.1 and process-local replay journals.
 
 This is not an approved release, security certification or production service.
-Licensing remains unresolved. No real operations, TLS, delegation, negotiation,
+The owner selected Apache-2.0; provenance and attribution review remains open. No real operations, TLS, delegation, negotiation,
 post-quantum cryptography or durable replay storage are implemented.
 
 See [implementation guide](implementation/README.md),

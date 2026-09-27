@@ -5,8 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ordavyn"
 version = "0.1.0"
-description = "Ordavyn local protocol prototype; licensing unresolved"
+description = "Ordavyn local protocol prototype; not approved for publication"
 readme = "README.md"
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 keywords = ["protocol", "agent", "ai", "interaction", "rpc", "api", "federation"]

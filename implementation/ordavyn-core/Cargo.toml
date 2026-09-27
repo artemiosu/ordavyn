@@ -2,7 +2,7 @@
 name = "ordavyn-core"
 version.workspace = true
 edition.workspace = true
-license-file = "../LICENSE"
+license.workspace = true
 publish = false
 authors.workspace = true
 description = "Ordavyn core protocol library — AIM types, CBOR encoding, Ed25519 signing, message envelope"

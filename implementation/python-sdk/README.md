@@ -3,8 +3,9 @@
 Local, role-neutral protocol prototype for simulated participant interactions.
 Every exposed action requires an Ed25519 signature and an explicit local permission.
 Only loopback HTTP/1.1 with JSON is implemented. This package is not an approved
-release; licensing remains unresolved. The included LICENSE is a status notice,
-not a new license grant. Do not upload or redistribute this candidate.
+release. The owner selected Apache-2.0 on 2026-09-27; LICENSE contains its standard
+text. Rights to inherited material and attribution remain under review. Publication
+of this candidate is not authorized; package metadata is not legal clearance.
 
 ## Install a local artifact
 
