@@ -1,0 +1,28 @@
+[package]
+name = "agentbridge-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "AgentBridge core protocol library — AIM types, CBOR encoding, Ed25519 signing, message envelope"
+
+[dependencies]
+# CBOR encoding (RFC 8949)
+ciborium = "0.2"
+# Ed25519 signatures (RFC 8032, PureEdDSA)
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+# SHA-256 hashing (FIPS 180-4)
+sha2 = "0.10"
+# Serialization framework
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Random number generation (for key generation)
+rand = "0.8"
+# Error handling
+thiserror = "1"
+# Async runtime (for transport)
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+# Property testing
+proptest = "1"
