@@ -1,7 +1,7 @@
 # Ordavyn release status
 
-Local migration candidate only. Publication remains blocked by unresolved provenance/attribution
-and the need for a separately approved public file set. No push or publication was
+Local migration candidate only. Publication remains blocked pending checks of the exact release contents
+and a separately approved public file set. No push or publication was
 performed; the local pre-push hook remains a blocking control.
 
 Implemented locally: protected request dispatch in Python and Rust; Ed25519 signature
@@ -23,6 +23,9 @@ The original Apache text and conflicting Cargo declaration are preserved externa
 see [PROVENANCE.md](PROVENANCE.md). On 2026-09-27 the owner selected Apache-2.0.
 Standard license files and package metadata now reflect that selection; no
 rights-holder identity was invented and no third-party rights were established.
+The owner subsequently confirmed that the project code was created solely by
+them with AI assistance. The code-origin question is answered by that declaration;
+dependency licenses and release-content checks remain separate.
 
 CBOR transport decoding, CBOR decoder resource-limit enforcement and streaming
 transport are unsupported. Rust CBOR depth/collection constants are proposed
