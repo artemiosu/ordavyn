@@ -1,11 +1,10 @@
 [workspace]
-members = ["agentbridge-core"]
+members = ["ordavyn-core"]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license-file = "LICENSE"
 authors = ["artemiosu"]
-repository = "https://github.com/artemiosu/agentbridge-protocol"
-description = "AgentBridge — protocol for safe, efficient, standardized interaction in the future internet"
+description = "Ordavyn local protocol prototype; release blocked pending licensing resolution"

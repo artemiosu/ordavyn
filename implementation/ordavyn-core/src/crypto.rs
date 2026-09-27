@@ -6,11 +6,11 @@
 //!
 //! Algorithm registry (BC v1.1.0 §3.8):
 //! - Algorithm ID 1: Ed25519 (RFC 8032) — 64-byte signatures, current default
-//! - Algorithm ID 2: ML-DSA-65 (FIPS 204) — ~3300-byte signatures, planned for production
-//! - Algorithm ID 3: Hybrid Ed25519 + ML-DSA-65 — ~3364-byte signatures, recommended
+//! - Algorithm ID 2: ML-DSA-65 (FIPS 204) — reserved identifier only; not implemented
+//! - Algorithm ID 3: Hybrid Ed25519 + ML-DSA-65 — reserved identifier only; not implemented
 
 use crate::error::{CoreError, Result};
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
@@ -20,9 +20,9 @@ use serde::{Deserialize, Serialize};
 pub enum SignatureAlgorithm {
     /// Ed25519 (RFC 8032) — 64-byte signatures. Default for v1.1.0.
     Ed25519 = 1,
-    /// ML-DSA-65 (FIPS 204) — ~3300-byte signatures. Planned for production.
+    /// ML-DSA-65 (FIPS 204) — Reserved identifier only; not implemented.
     MLDSA65 = 2,
-    /// Hybrid Ed25519 + ML-DSA-65 — ~3364-byte signatures. Recommended.
+    /// Hybrid Ed25519 + ML-DSA-65 — Reserved identifier only; not implemented.
     HybridEd25519MLDSA65 = 3,
 }
 
@@ -42,11 +42,11 @@ impl SignatureAlgorithm {
         }
     }
 
-    /// Get expected signature size in bytes.
+    /// Inherited registry size hints; reserved PQ values are unverified and not implementations.
     pub fn signature_size(&self) -> usize {
         match self {
             SignatureAlgorithm::Ed25519 => 64,
-            SignatureAlgorithm::MLDSA65 => 3300,     // approximate
+            SignatureAlgorithm::MLDSA65 => 3300, // approximate
             SignatureAlgorithm::HybridEd25519MLDSA65 => 3364, // 64 + 3300
         }
     }
@@ -77,7 +77,9 @@ impl Ed25519PublicKey {
 
 impl From<VerifyingKey> for Ed25519PublicKey {
     fn from(key: VerifyingKey) -> Self {
-        Self { bytes: key.to_bytes() }
+        Self {
+            bytes: key.to_bytes(),
+        }
     }
 }
 
@@ -90,10 +92,11 @@ impl TryFrom<&Ed25519PublicKey> for VerifyingKey {
 }
 
 /// Ed25519 signature (variable-length, but 64 bytes for Ed25519).
-/// Stored as Vec<u8> for PQ-readiness (ML-DSA-65 signatures are ~3300 bytes).
+/// Stored as Vec<u8>, but verification accepts only 64-byte Ed25519 signatures.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Ed25519Signature {
-    /// Raw signature bytes (64 bytes for Ed25519, ~3300 for ML-DSA-65).
+    /// Raw signature bytes; only 64-byte Ed25519 signatures are supported.
     pub bytes: Vec<u8>,
     /// Algorithm used to produce this signature.
     pub algorithm: SignatureAlgorithm,
@@ -156,6 +159,9 @@ impl Ed25519Keypair {
         message: &[u8],
         signature: &Ed25519Signature,
     ) -> Result<()> {
+        if signature.algorithm != SignatureAlgorithm::Ed25519 {
+            return Err(CoreError::Crypto("unsupported signature algorithm".into()));
+        }
         let verifying_key = VerifyingKey::try_from(public_key)?;
 
         let sig_bytes: [u8; 64] = signature
@@ -167,7 +173,7 @@ impl Ed25519Keypair {
         let sig = Signature::from_bytes(&sig_bytes);
 
         verifying_key
-            .verify(message, &sig)
+            .verify_strict(message, &sig)
             .map_err(|_| CoreError::SignatureVerificationFailed)
     }
 }
@@ -194,7 +200,7 @@ mod tests {
     #[test]
     fn test_sign_and_verify() {
         let kp = Ed25519Keypair::generate();
-        let message = b"Hello, AgentBridge!";
+        let message = b"Hello, Ordavyn!";
         let signature = kp.sign(message);
 
         // Verification should succeed
@@ -204,8 +210,8 @@ mod tests {
     #[test]
     fn test_verify_wrong_message() {
         let kp = Ed25519Keypair::generate();
-        let message = b"Hello, AgentBridge!";
-        let wrong_message = b"Goodbye, AgentBridge!";
+        let message = b"Hello, Ordavyn!";
+        let wrong_message = b"Goodbye, Ordavyn!";
         let signature = kp.sign(message);
 
         // Verification with wrong message should fail
@@ -216,7 +222,7 @@ mod tests {
     fn test_verify_wrong_key() {
         let kp1 = Ed25519Keypair::generate();
         let kp2 = Ed25519Keypair::generate();
-        let message = b"Hello, AgentBridge!";
+        let message = b"Hello, Ordavyn!";
         let signature = kp1.sign(message);
 
         // Verification with wrong key should fail
@@ -254,7 +260,10 @@ mod tests {
 
         assert_eq!(SignatureAlgorithm::Ed25519.signature_size(), 64);
         assert_eq!(SignatureAlgorithm::MLDSA65.signature_size(), 3300);
-        assert_eq!(SignatureAlgorithm::HybridEd25519MLDSA65.signature_size(), 3364);
+        assert_eq!(
+            SignatureAlgorithm::HybridEd25519MLDSA65.signature_size(),
+            3364
+        );
     }
 
     #[test]

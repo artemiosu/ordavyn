@@ -1,10 +1,11 @@
 [package]
-name = "agentbridge-core"
+name = "ordavyn-core"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file = "../LICENSE"
+publish = false
 authors.workspace = true
-description = "AgentBridge core protocol library — AIM types, CBOR encoding, Ed25519 signing, message envelope"
+description = "Ordavyn core protocol library — AIM types, CBOR encoding, Ed25519 signing, message envelope"
 
 [dependencies]
 # CBOR encoding (RFC 8949)

@@ -1,13 +1,16 @@
-//! Canonical CBOR encoding for AgentBridge (RFC 8949 §4.2.1, BC v1.1.0 §8).
+//! Canonical CBOR encoding for Ordavyn (RFC 8949 §4.2.1, BC v1.1.0 §8).
 //!
 //! Produces deterministic byte sequences for signing and digest verification.
 //! Uses CBOR arrays (not maps) for signable content — guarantees field order by construction.
 
-use crate::aim::{Duration, Identifier, Instant, Reference, WallclockInstant, WallclockUncertainty};
-use crate::cbor_tags::{TAG_DURATION, TAG_IDENTIFIER, TAG_INSTANT, TAG_REFERENCE, TAG_WALLCLOCK_INSTANT};
+use crate::aim::{
+    Duration, Identifier, Instant, Reference, WallclockInstant, WallclockUncertainty,
+};
+use crate::cbor_tags::{
+    TAG_DURATION, TAG_IDENTIFIER, TAG_INSTANT, TAG_REFERENCE, TAG_WALLCLOCK_INSTANT,
+};
 use crate::error::{CoreError, Result};
 use ciborium::value::Value;
-use std::collections::BTreeMap;
 use std::io::Cursor;
 
 // ============================================================================
@@ -34,7 +37,9 @@ pub fn cbor_to_identifier(val: &Value) -> Result<Identifier> {
         _ => return Err(CoreError::CborDecoding("Identifier must be array".into())),
     };
     if arr.len() < 3 || arr.len() > 4 {
-        return Err(CoreError::CborDecoding("Identifier must have 3-4 elements".into()));
+        return Err(CoreError::CborDecoding(
+            "Identifier must have 3-4 elements".into(),
+        ));
     }
     // arr[0] is the tag marker
     let namespace = match &arr[1] {
@@ -53,7 +58,11 @@ pub fn cbor_to_identifier(val: &Value) -> Result<Identifier> {
     } else {
         None
     };
-    Ok(Identifier { namespace, value, version })
+    Ok(Identifier {
+        namespace,
+        value,
+        version,
+    })
 }
 
 /// Convert a `Reference` to a CBOR Value.
@@ -76,7 +85,9 @@ pub fn cbor_to_reference(val: &Value) -> Result<Reference> {
         _ => return Err(CoreError::CborDecoding("Reference must be array".into())),
     };
     if arr.len() < 3 || arr.len() > 4 {
-        return Err(CoreError::CborDecoding("Reference must have 3-4 elements".into()));
+        return Err(CoreError::CborDecoding(
+            "Reference must have 3-4 elements".into(),
+        ));
     }
     let target_type = match &arr[1] {
         Value::Text(s) => s.clone(),
@@ -86,12 +97,20 @@ pub fn cbor_to_reference(val: &Value) -> Result<Reference> {
     let closure_version = if arr.len() == 4 {
         match &arr[3] {
             Value::Integer(i) => Some((*i).try_into().unwrap_or(0u64)),
-            _ => return Err(CoreError::CborDecoding("closure_version must be integer".into())),
+            _ => {
+                return Err(CoreError::CborDecoding(
+                    "closure_version must be integer".into(),
+                ))
+            }
         }
     } else {
         None
     };
-    Ok(Reference { target_type, target_id, closure_version })
+    Ok(Reference {
+        target_type,
+        target_id,
+        closure_version,
+    })
 }
 
 /// Convert an `Instant` to a CBOR Value.
@@ -109,11 +128,17 @@ pub fn cbor_to_instant(val: &Value) -> Result<Instant> {
         _ => return Err(CoreError::CborDecoding("Instant must be array".into())),
     };
     if arr.len() != 2 {
-        return Err(CoreError::CborDecoding("Instant must have 2 elements".into()));
+        return Err(CoreError::CborDecoding(
+            "Instant must have 2 elements".into(),
+        ));
     }
     let nanos = match &arr[1] {
         Value::Integer(i) => (*i).try_into().unwrap_or(0u64),
-        _ => return Err(CoreError::CborDecoding("Instant nanos must be integer".into())),
+        _ => {
+            return Err(CoreError::CborDecoding(
+                "Instant nanos must be integer".into(),
+            ))
+        }
     };
     Ok(Instant { nanos })
 }
@@ -133,11 +158,17 @@ pub fn cbor_to_duration(val: &Value) -> Result<Duration> {
         _ => return Err(CoreError::CborDecoding("Duration must be array".into())),
     };
     if arr.len() != 2 {
-        return Err(CoreError::CborDecoding("Duration must have 2 elements".into()));
+        return Err(CoreError::CborDecoding(
+            "Duration must have 2 elements".into(),
+        ));
     }
     let nanos = match &arr[1] {
         Value::Integer(i) => (*i).try_into().unwrap_or(0u64),
-        _ => return Err(CoreError::CborDecoding("Duration nanos must be integer".into())),
+        _ => {
+            return Err(CoreError::CborDecoding(
+                "Duration nanos must be integer".into(),
+            ))
+        }
     };
     Ok(Duration { nanos })
 }
@@ -159,10 +190,16 @@ pub fn wallclock_to_cbor(w: &WallclockInstant) -> Value {
 pub fn cbor_to_wallclock(val: &Value) -> Result<WallclockInstant> {
     let arr = match val {
         Value::Array(a) => a,
-        _ => return Err(CoreError::CborDecoding("WallclockInstant must be array".into())),
+        _ => {
+            return Err(CoreError::CborDecoding(
+                "WallclockInstant must be array".into(),
+            ))
+        }
     };
     if arr.len() != 3 {
-        return Err(CoreError::CborDecoding("WallclockInstant must have 3 elements".into()));
+        return Err(CoreError::CborDecoding(
+            "WallclockInstant must have 3 elements".into(),
+        ));
     }
     let central = match &arr[1] {
         Value::Integer(i) => (*i).try_into().unwrap_or(0u64),
@@ -172,7 +209,10 @@ pub fn cbor_to_wallclock(val: &Value) -> Result<WallclockInstant> {
         Value::Null => WallclockUncertainty::Unknown,
         _ => WallclockUncertainty::Known(cbor_to_duration(&arr[2])?),
     };
-    Ok(WallclockInstant { central, uncertainty })
+    Ok(WallclockInstant {
+        central,
+        uncertainty,
+    })
 }
 
 // ============================================================================

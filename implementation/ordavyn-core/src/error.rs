@@ -1,8 +1,8 @@
-//! Error types for AgentBridge core.
+//! Error types for Ordavyn core.
 
 use thiserror::Error;
 
-/// Core error type for AgentBridge operations.
+/// Core error type for Ordavyn operations.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CoreError {
     #[error("invalid identifier: {0}")]
@@ -39,5 +39,5 @@ pub enum CoreError {
     Serialization(String),
 }
 
-/// Result type for AgentBridge core operations.
+/// Result type for Ordavyn core operations.
 pub type Result<T> = std::result::Result<T, CoreError>;

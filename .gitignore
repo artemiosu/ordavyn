@@ -9,7 +9,6 @@
 .env
 .env.*
 !.env.example
-.agentbridge-private/
 .ordavyn-migration-local/
 .ordavyn-private/
 /_bmad-output/
@@ -20,3 +19,5 @@
 *.log
 *.tar.gz
 *.bundle
+
+.*-private/

@@ -1,22 +1,18 @@
-"""AgentBridge Python SDK
+"""Ordavyn local SDK: authenticated requests, explicit local grants, process-local replay protection.
 
-Protocol for safe, efficient, standardized interaction in the future internet.
-
-Based on:
-- AIM v1.0.1: Abstract Information Model
-- BC v1.1.0: Binding Contract (HTTP/2, CBOR+JSON, Ed25519, SHA-256, TLS 1.3)
+HTTP/1.1 loopback only. No TLS, delegation, negotiation or PQ implementation.
 """
 
 from .aim import Identifier, Reference, Instant, Duration, WallclockInstant, ValueState
 from .crypto import Ed25519Keypair, sha256_digest, ALG_ED25519
 from .message import Message, MessageBuilder, MessageType
-from .client import AgentBridgeClient
-from .fastapi_integration import AgentBridge
+from .client import OrdavynClient
+from .server import Ordavyn
 
 __version__ = "0.1.0"
 
 __all__ = [
-    "AgentBridge",
+    "Ordavyn",
     "Identifier",
     "Reference",
     "Instant",
@@ -29,5 +25,5 @@ __all__ = [
     "Message",
     "MessageBuilder",
     "MessageType",
-    "AgentBridgeClient",
+    "OrdavynClient",
 ]

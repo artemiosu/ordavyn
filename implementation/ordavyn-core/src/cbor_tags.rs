@@ -1,6 +1,6 @@
-//! CBOR tag assignments for AgentBridge types (BC v1.1.0 §8.1, RFC 8949).
+//! CBOR tag assignments for Ordavyn types (BC v1.1.0 §8.1, RFC 8949).
 //!
-//! Tags 40001-40005 are assigned to AgentBridge-specific types.
+//! Tags 40001-40005 are assigned to Ordavyn-specific types.
 //! Tags 40006-40099 are reserved for future use.
 
 // Re-export tag constants from aim module for convenience
@@ -8,20 +8,20 @@ pub use crate::aim::{
     TAG_DURATION, TAG_IDENTIFIER, TAG_INSTANT, TAG_REFERENCE, TAG_WALLCLOCK_INSTANT,
 };
 
-/// Reserved tag range start for AgentBridge (RFC 8949 §2).
-pub const TAG_AGENTBRIDGE_START: u64 = 40001;
-/// Reserved tag range end for AgentBridge.
-pub const TAG_AGENTBRIDGE_END: u64 = 40099;
+/// Reserved tag range start for Ordavyn (RFC 8949 §2).
+pub const TAG_ORDAVYN_START: u64 = 40001;
+/// Reserved tag range end for Ordavyn.
+pub const TAG_ORDAVYN_END: u64 = 40099;
 
-/// Maximum CBOR nesting depth (BC v1.1.0 §8.5 — decoder limit).
+/// Proposed CBOR nesting target. Not enforced by the prototype decoder.
 pub const MAX_NESTING_DEPTH: usize = 16;
 
-/// Maximum CBOR array/map length (BC v1.1.0 §8.5 — decoder limit).
+/// Proposed CBOR collection target. Not enforced by the prototype decoder.
 pub const MAX_ARRAY_LENGTH: usize = 1_048_576; // 2^20
 
-/// Check if a tag is in the AgentBridge reserved range.
-pub fn is_agentbridge_tag(tag: u64) -> bool {
-    tag >= TAG_AGENTBRIDGE_START && tag <= TAG_AGENTBRIDGE_END
+/// Check if a tag is in the Ordavyn reserved range.
+pub fn is_ordavyn_tag(tag: u64) -> bool {
+    tag >= TAG_ORDAVYN_START && tag <= TAG_ORDAVYN_END
 }
 
 /// Check if a tag is known (in the allowlist).
@@ -34,14 +34,14 @@ pub fn is_known_tag(tag: u64) -> bool {
 
 /// Reject unknown tags > 40099 (BC v1.1.0 §8.5 — tag handler allowlist).
 pub fn validate_tag(tag: u64) -> bool {
-    if tag < TAG_AGENTBRIDGE_START {
+    if tag < TAG_ORDAVYN_START {
         return true; // Standard CBOR tags, not our concern
     }
     if is_known_tag(tag) {
         return true;
     }
-    // Unknown AgentBridge tags > 40099 are rejected
-    if tag > TAG_AGENTBRIDGE_END {
+    // Unknown Ordavyn tags > 40099 are rejected
+    if tag > TAG_ORDAVYN_END {
         return false;
     }
     // Unknown but within reserved range (40006-40099) — rejected per BC §8.5
@@ -62,13 +62,13 @@ mod tests {
     }
 
     #[test]
-    fn test_is_agentbridge_tag() {
-        assert!(is_agentbridge_tag(40001));
-        assert!(is_agentbridge_tag(40050));
-        assert!(is_agentbridge_tag(40099));
-        assert!(!is_agentbridge_tag(40000));
-        assert!(!is_agentbridge_tag(40100));
-        assert!(!is_agentbridge_tag(0));
+    fn test_is_ordavyn_tag() {
+        assert!(is_ordavyn_tag(40001));
+        assert!(is_ordavyn_tag(40050));
+        assert!(is_ordavyn_tag(40099));
+        assert!(!is_ordavyn_tag(40000));
+        assert!(!is_ordavyn_tag(40100));
+        assert!(!is_ordavyn_tag(0));
     }
 
     #[test]
@@ -88,21 +88,15 @@ mod tests {
         assert!(validate_tag(0));
         assert!(validate_tag(1));
         assert!(validate_tag(1000));
-        // Known AgentBridge tags are allowed
+        // Known Ordavyn tags are allowed
         assert!(validate_tag(40001));
         assert!(validate_tag(40005));
-        // Unknown AgentBridge tags (40006-40099) are rejected (BC §8.5)
+        // Unknown Ordavyn tags (40006-40099) are rejected (BC §8.5)
         assert!(!validate_tag(40006));
         assert!(!validate_tag(40050));
         assert!(!validate_tag(40099));
         // Tags > 40099 are rejected
         assert!(!validate_tag(40100));
         assert!(!validate_tag(50000));
-    }
-
-    #[test]
-    fn test_decoder_limits() {
-        assert_eq!(MAX_NESTING_DEPTH, 16);
-        assert_eq!(MAX_ARRAY_LENGTH, 1_048_576);
     }
 }

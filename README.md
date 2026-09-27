@@ -1,11 +1,18 @@
-# Ordavyn — local migration candidate
+# Ordavyn — local protocol prototype
 
-Not a public release. This working copy preserves the transferred AgentBridge implementation while migration is prepared. Legacy package names, wire identifiers and implementation documentation remain unchanged; their readiness claims are not endorsed by this page.
+Ordavyn explores a native protocol and SDK ecosystem for agent↔service,
+agent↔agent and service↔service interaction. Native Architecture-First and
+role-neutral scope remain the design direction; commercial services are optional.
 
-The intended project is a native protocol and SDK ecosystem for agent↔service, agent↔agent and service↔service interaction, not an agent application or mandatory aggregation layer.
+The local Rust and Python implementations authenticate requests with Ed25519,
+require explicit local permissions and reserve message/operation IDs before
+handlers run. They use bounded loopback HTTP/1.1 and process-local replay journals.
 
-Security, licensing, package installation and documentation issues remain open. Do not use for production, real transactions, sensitive data or exposure to untrusted networks. Passing the inherited tests is not a security or conformance certification.
+This is not an approved release, security certification or production service.
+Licensing remains unresolved. No real operations, TLS, delegation, negotiation,
+post-quantum cryptography or durable replay storage are implemented.
 
-Source: the owner-provided agentbridge-transfer.tar.gz snapshot, SHA-256 d7516e55a938b831bd6d21a98b6a3f7e811cf0f58232af0fdb2f2c3a45581ee0. Source code under implementation/ has not been renamed or repaired in this preparation step.
-
-The intended repository is `artemiosu/ordavyn`. Preparing a local Git remote does not mean this candidate has been published or approved for release. Public documentation and governance files will be curated separately; private planning material and old Git history are excluded from version control.
+See [implementation guide](implementation/README.md),
+[tutorial](implementation/TUTORIAL.md), [release status](docs/RELEASE-STATUS.md)
+and [provenance](docs/PROVENANCE.md). Private planning and old Git history are
+excluded from the publishable file set. Publication requires a separate decision.

@@ -1,10 +1,6 @@
-"""Tests for AgentBridge Python SDK."""
+"""Tests for Ordavyn Python SDK."""
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from agentbridge import (
+from ordavyn import (
     Identifier, Reference, Instant, Duration, WallclockInstant, ValueState,
     Ed25519Keypair, Message, MessageBuilder, MessageType,
 )
@@ -143,7 +139,7 @@ def test_keypair_generation():
 
 def test_sign_and_verify():
     kp = Ed25519Keypair.generate()
-    message = b"Hello, AgentBridge!"
+    message = b"Hello, Ordavyn!"
     signature = kp.sign(message)
     assert Ed25519Keypair.verify(kp.public_key_bytes(), message, signature)
 

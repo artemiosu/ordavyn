@@ -30,7 +30,7 @@ pub const TAG_WALLCLOCK_INSTANT: u64 = 40005;
 
 /// Four-valued field state (AIM §4): absent, explicit-empty, unknown, invalid.
 ///
-/// Every field in AgentBridge can be in one of four states:
+/// Every field in Ordavyn can be in one of four states:
 /// - `Absent` — field not present in the model
 /// - `ExplicitEmpty` — field present and intentionally empty
 /// - `Unknown` — field present but value cannot be established
@@ -59,11 +59,12 @@ impl fmt::Display for ValueState {
 // Identifier (AIM §9)
 // ============================================================================
 
-/// AgentBridge `Identifier` — typed `(namespace, value, version?)` tuple (AIM §9.1).
+/// Ordavyn `Identifier` — typed `(namespace, value, version?)` tuple (AIM §9.1).
 ///
 /// Identifiers are immutable. Equality is component-wise (AIM §9.2).
 /// The minimum namespace alphabet is URN RFC 8141 subset: `a-z`, `0-9`, `-`, `.`, `:`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Identifier {
     /// Namespace — non-empty String from URN RFC 8141 subset alphabet.
     pub namespace: String,
@@ -97,9 +98,9 @@ impl Identifier {
         if self.namespace.is_empty() {
             return false;
         }
-        self.namespace
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.' || c == ':')
+        self.namespace.chars().all(|c| {
+            c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.' || c == ':'
+        })
     }
 
     /// Validate value is non-empty (AIM §9.1).
@@ -143,11 +144,12 @@ impl PartialOrd for Identifier {
 // Reference (AIM §10)
 // ============================================================================
 
-/// AgentBridge `Reference` — typed pointer to another AIM object (AIM §10.1).
+/// Ordavyn `Reference` — typed pointer to another AIM object (AIM §10.1).
 ///
 /// References carry: declared target type, target Identifier, optional closure version (Integer).
 /// Target MUST be a non-Reference AIM object (AIM §10.1, BC v1.1.0).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Reference {
     /// Declared target type (e.g., "Artifact", "Evidence", "DecisionSubject").
     pub target_type: String,
@@ -180,7 +182,11 @@ impl Reference {
 impl fmt::Display for Reference {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.closure_version {
-            Some(v) => write!(f, "Reference<{}>({}@{})", self.target_type, self.target_id, v),
+            Some(v) => write!(
+                f,
+                "Reference<{}>({}@{})",
+                self.target_type, self.target_id, v
+            ),
             None => write!(f, "Reference<{}>({})", self.target_type, self.target_id),
         }
     }
@@ -190,11 +196,12 @@ impl fmt::Display for Reference {
 // Instant (AIM §8.1) — per-context monotonic logical time
 // ============================================================================
 
-/// AgentBridge `Instant` — monotonic logical time, per-context (AIM §8.1).
+/// Ordavyn `Instant` — monotonic logical time, per-context (AIM §8.1).
 ///
 /// Stored as nanoseconds since context epoch. Cross-context comparison
 /// is invalid without explicit projection (AIM §8.1, AAM §13.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Instant {
     /// Nanoseconds since context epoch.
     pub nanos: u64,
@@ -206,11 +213,15 @@ impl Instant {
     }
 
     pub fn from_millis(millis: u64) -> Self {
-        Self { nanos: millis * 1_000_000 }
+        Self {
+            nanos: millis * 1_000_000,
+        }
     }
 
     pub fn from_secs(secs: u64) -> Self {
-        Self { nanos: secs * 1_000_000_000 }
+        Self {
+            nanos: secs * 1_000_000_000,
+        }
     }
 
     /// Subtract two Instants from the same context → Duration (AIM §8.1).
@@ -232,7 +243,7 @@ impl fmt::Display for Instant {
 // Duration (AIM §8.2) — non-negative rational seconds
 // ============================================================================
 
-/// AgentBridge `Duration` — non-negative duration in nanoseconds (AIM §8.2).
+/// Ordavyn `Duration` — non-negative duration in nanoseconds (AIM §8.2).
 ///
 /// Negative durations are invalid. Multiplication by negative scalar is invalid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -247,21 +258,29 @@ impl Duration {
     }
 
     pub fn from_millis(millis: u64) -> Self {
-        Self { nanos: millis * 1_000_000 }
+        Self {
+            nanos: millis * 1_000_000,
+        }
     }
 
     pub fn from_secs(secs: u64) -> Self {
-        Self { nanos: secs * 1_000_000_000 }
+        Self {
+            nanos: secs * 1_000_000_000,
+        }
     }
 
     /// Add two Durations (AIM §8.2).
     pub fn add(&self, other: &Duration) -> Option<Duration> {
-        self.nanos.checked_add(other.nanos).map(|nanos| Duration { nanos })
+        self.nanos
+            .checked_add(other.nanos)
+            .map(|nanos| Duration { nanos })
     }
 
     /// Subtract two Durations. Returns None if result would be negative (AIM §8.2).
     pub fn sub(&self, other: &Duration) -> Option<Duration> {
-        self.nanos.checked_sub(other.nanos).map(|nanos| Duration { nanos })
+        self.nanos
+            .checked_sub(other.nanos)
+            .map(|nanos| Duration { nanos })
     }
 
     /// Check if duration is zero (AIM §4.5: Duration(0) is a valid value, not a state).
@@ -280,7 +299,7 @@ impl fmt::Display for Duration {
 // WallclockInstant (AIM §8.3) — civil time with explicit uncertainty
 // ============================================================================
 
-/// AgentBridge `WallclockInstant` — civil time paired with uncertainty (AIM §8.3).
+/// Ordavyn `WallclockInstant` — civil time paired with uncertainty (AIM §8.3).
 ///
 /// NOT comparable to `Instant` without explicit projection.
 /// Zero uncertainty does NOT collapse the domain distinction (AIM §8.3, BC v1.1.0).
@@ -329,8 +348,12 @@ impl WallclockInstant {
 impl fmt::Display for WallclockInstant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.uncertainty {
-            WallclockUncertainty::Known(d) => write!(f, "WallclockInstant({}±{}ns)", self.central, d.nanos),
-            WallclockUncertainty::Unknown => write!(f, "WallclockInstant({}±unknown)", self.central),
+            WallclockUncertainty::Known(d) => {
+                write!(f, "WallclockInstant({}±{}ns)", self.central, d.nanos)
+            }
+            WallclockUncertainty::Unknown => {
+                write!(f, "WallclockInstant({}±unknown)", self.central)
+            }
         }
     }
 }

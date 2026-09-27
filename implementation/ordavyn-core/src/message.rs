@@ -1,15 +1,10 @@
-//! Message envelope — COSE-style, PQ-ready (BC v1.1.0 §4.1).
-//!
-//! The message envelope includes:
-//! - `signature_alg`: algorithm ID from the registry (BC v1.1.0 §3.8)
-//! - `key_id`: verifier key identifier
-//! - `signature`: variable-length signature (64B for Ed25519, ~3300B for ML-DSA-65)
-//!
-//! This is a **breaking change from BC v1.0.0** which had a fixed 64-byte
-//! signature field with no algorithm identifier (consortium fix #2).
+//! Local Ordavyn message envelope with Ed25519-authenticated metadata.
+//! Rust signs a fixed CBOR array; COSE encoding, PQ and negotiation are not implemented.
 
 use crate::aim::{Identifier, Instant, Reference};
-use crate::cbor_encoding::{canonical_bytes, identifier_to_cbor, instant_to_cbor, reference_to_cbor};
+use crate::cbor_encoding::{
+    canonical_bytes, identifier_to_cbor, instant_to_cbor, reference_to_cbor,
+};
 use crate::crypto::{Ed25519Keypair, Ed25519Signature, SignatureAlgorithm};
 use crate::error::{CoreError, Result};
 use ciborium::value::Value;
@@ -25,14 +20,9 @@ pub enum MessageType {
     Error,
 }
 
-/// AgentBridge message envelope (BC v1.1.0 §4.1 — COSE-style, PQ-ready).
-///
-/// v1.1.0 changes from v1.0.0:
-/// - `signature_alg` field added (algorithm ID from §3.8 registry)
-/// - `key_id` field added (verifier key identifier)
-/// - `signature` is now variable-length (not fixed 64 bytes)
-/// - `encoding` field added (negotiated per §9)
+/// Local envelope; only Ed25519 and the fixed CBOR signing format are supported.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Message {
     /// Protocol version (currently 1).
     pub version: u8,
@@ -60,7 +50,7 @@ pub struct Message {
     pub signature: Option<Ed25519Signature>,
     /// Send time (AIM §8.1).
     pub timestamp: Instant,
-    /// Encoding ("cbor" or "json"). Default "cbor".
+    /// Fixed signing representation "cbor"; JSON transport does not negotiate it.
     pub encoding: String,
 }
 
@@ -73,9 +63,11 @@ impl Message {
     /// Sign this message with an Ed25519 keypair.
     ///
     /// Uses PureEdDSA (RFC 8032, direct signing, NO pre-hash).
-    /// Signs the canonical CBOR encoding of the message (without signature fields).
+    /// Signs the canonical CBOR encoding of the message (excluding only the signature value).
     pub fn sign(&mut self, keypair: &Ed25519Keypair) -> Result<()> {
-        // Get the canonical bytes to sign (message without signature fields)
+        self.signature_alg = Some(SignatureAlgorithm::Ed25519);
+        self.key_id = Some(keypair.key_id());
+        // Metadata is authenticated along with payload.
         let signable_bytes = self.canonical_signable_bytes()?;
 
         // Sign using PureEdDSA (BC v1.1.0 §6.1 — direct, no pre-hash)
@@ -97,12 +89,21 @@ impl Message {
             .as_ref()
             .ok_or_else(|| CoreError::InvalidMessage("no signature present".to_string()))?;
 
+        if self.signature_alg != Some(SignatureAlgorithm::Ed25519)
+            || self.key_id.as_deref() != Some(public_key.key_id().as_str())
+            || self.encoding != "cbor"
+            || sig.algorithm != SignatureAlgorithm::Ed25519
+        {
+            return Err(CoreError::InvalidMessage(
+                "invalid signature metadata".into(),
+            ));
+        }
         let signable_bytes = self.canonical_signable_bytes()?;
 
         Ed25519Keypair::verify(public_key, &signable_bytes, sig)
     }
 
-    /// Get the canonical bytes that are signed (message without signature fields).
+    /// Get the canonical bytes that are signed (message without the signature value).
     ///
     /// Uses canonical CBOR encoding (RFC 8949 §4.2.1, BC v1.1.0 §8.2).
     /// Signable fields are encoded as a CBOR array (field order is deterministic by construction).
@@ -121,6 +122,11 @@ impl Message {
             identifier_to_cbor(&self.epoch),
             payload_cbor,
             instant_to_cbor(&self.timestamp),
+            self.signature_alg
+                .map(|a| Value::Integer(a.id().into()))
+                .unwrap_or(Value::Null),
+            self.key_id.clone().map(Value::Text).unwrap_or(Value::Null),
+            Value::Text(self.encoding.clone()),
         ]);
 
         canonical_bytes(&signable)
@@ -144,17 +150,20 @@ fn json_to_cbor(json: &serde_json::Value) -> Value {
             }
         }
         serde_json::Value::String(s) => Value::Text(s.clone()),
-        serde_json::Value::Array(arr) => {
-            Value::Array(arr.iter().map(json_to_cbor).collect())
-        }
+        serde_json::Value::Array(arr) => Value::Array(arr.iter().map(json_to_cbor).collect()),
         serde_json::Value::Object(obj) => {
-            // Encode as sorted array of [key, value] pairs for deterministic ordering
+            // Preserve the object type; arrays and maps must never sign identically.
             let mut entries: Vec<(String, Value)> = obj
                 .iter()
                 .map(|(k, v)| (k.clone(), json_to_cbor(v)))
                 .collect();
             entries.sort_by(|a, b| a.0.len().cmp(&b.0.len()).then_with(|| a.0.cmp(&b.0)));
-            Value::Array(entries.into_iter().flat_map(|(k, v)| vec![Value::Text(k), v]).collect())
+            Value::Map(
+                entries
+                    .into_iter()
+                    .map(|(k, v)| (Value::Text(k), v))
+                    .collect(),
+            )
         }
     }
 }
@@ -172,7 +181,10 @@ impl MessageBuilder {
                 msg_type: MessageType::Request,
                 id: Identifier::new("message", &uuid_like()),
                 operation_id: Identifier::new("logical-operation", &uuid_like()),
-                subject: Reference::new("DecisionSubject", Identifier::new("decision-subject", "placeholder")),
+                subject: Reference::new(
+                    "DecisionSubject",
+                    Identifier::new("decision-subject", "placeholder"),
+                ),
                 from,
                 to,
                 epoch: Identifier::new("epoch", "current"),
@@ -228,12 +240,10 @@ impl MessageBuilder {
 
 /// Simple UUID-like generator for prototype (not cryptographically random, just unique-ish).
 fn uuid_like() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    format!("id-{}", nanos)
+    use rand::RngCore;
+    let mut bytes = [0u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 #[cfg(test)]
@@ -336,12 +346,14 @@ mod tests {
         let op_id = Identifier::new("logical-operation", "test-op-001");
 
         let mut msg1 = MessageBuilder::new(from.clone(), to.clone())
-            .id(msg_id.clone()).operation_id(op_id.clone())
+            .id(msg_id.clone())
+            .operation_id(op_id.clone())
             .payload(serde_json::json!({"action": "buy", "product_id": "12345"}))
             .build();
 
         let mut msg2 = MessageBuilder::new(from, to)
-            .id(msg_id).operation_id(op_id)
+            .id(msg_id)
+            .operation_id(op_id)
             .payload(serde_json::json!({"action": "buy", "product_id": "12345"}))
             .build();
 
@@ -359,12 +371,14 @@ mod tests {
         let op_id = Identifier::new("logical-operation", "test-op-002");
 
         let msg1 = MessageBuilder::new(from.clone(), to.clone())
-            .id(msg_id.clone()).operation_id(op_id.clone())
+            .id(msg_id.clone())
+            .operation_id(op_id.clone())
             .payload(serde_json::json!({"action": "search", "query": "laptop"}))
             .build();
 
         let msg2 = MessageBuilder::new(from, to)
-            .id(msg_id).operation_id(op_id)
+            .id(msg_id)
+            .operation_id(op_id)
             .payload(serde_json::json!({"action": "search", "query": "laptop"}))
             .build();
 

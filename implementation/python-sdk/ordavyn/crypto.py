@@ -5,12 +5,13 @@ DIRECTLY, with NO SHA-256 pre-hash. Ed25519 hashes internally with SHA-512.
 
 Algorithm registry (BC v1.1.0 §3.8):
 - Algorithm ID 1: Ed25519 (current default)
-- Algorithm ID 2: ML-DSA-65 (planned)
-- Algorithm ID 3: Hybrid Ed25519 + ML-DSA-65 (recommended)
+- Algorithm ID 2: ML-DSA-65 (reserved; not implemented)
+- Algorithm ID 3: Hybrid Ed25519 + ML-DSA-65 (reserved; not implemented)
 """
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -36,6 +37,7 @@ ALGORITHM_NAMES = {
     ALG_HYBRID: "hybrid-ed25519-ml-dsa-65",
 }
 
+# Inherited registry hints; PQ values are unverified and not implementations.
 SIGNATURE_SIZES = {
     ALG_ED25519: 64,
     ALG_ML_DSA_65: 3300,
@@ -103,6 +105,25 @@ def canonical_json_bytes(obj: dict) -> bytes:
     """Serialize dict to canonical JSON bytes (deterministic, sorted keys).
 
     Used for message signing in the Python SDK (prototype).
-    Production will use canonical CBOR (RFC 8949 §4.2.1).
+    CBOR signing interoperability with Rust is not implemented.
     """
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    def validate(value):
+        if value is None or type(value) in (str, bool, int):
+            return
+        if type(value) is float:
+            if not math.isfinite(value):
+                raise ValueError("nonfinite JSON number")
+            return
+        if type(value) is list:
+            for item in value:
+                validate(item)
+            return
+        if type(value) is dict:
+            for key, item in value.items():
+                if type(key) is not str:
+                    raise ValueError("JSON object keys must be strings")
+                validate(item)
+            return
+        raise ValueError("unsupported JSON value type")
+    validate(obj)
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")

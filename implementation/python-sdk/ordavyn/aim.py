@@ -33,7 +33,7 @@ class ValueState:
 
 @dataclass(frozen=True)
 class Identifier:
-    """AgentBridge Identifier — typed (namespace, value, version?) tuple (AIM §9.1).
+    """Ordavyn Identifier — typed (namespace, value, version?) tuple (AIM §9.1).
 
     Immutable. Equality is component-wise (AIM §9.2).
     Namespace alphabet: URN RFC 8141 subset (a-z, 0-9, -, ., :).
@@ -65,6 +65,12 @@ class Identifier:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Identifier":
+        if not isinstance(d, dict) or not {"namespace", "value"} <= d.keys() or d.keys() - {"namespace", "value", "version"}:
+            raise ValueError("invalid identifier fields")
+        if (type(d['namespace']) is not str or type(d['value']) is not str
+                or not d['value'] or len(d['value']) > 256 or len(d['namespace']) > 256
+                or (d.get('version') is not None and (type(d['version']) is not int or not 0 <= d['version'] < 2**64))):
+            raise ValueError("invalid identifier metadata")
         return cls(
             namespace=d["namespace"],
             value=d["value"],
@@ -89,7 +95,7 @@ class Identifier:
 
 @dataclass(frozen=True)
 class Reference:
-    """AgentBridge Reference — typed pointer to another AIM object (AIM §10.1).
+    """Ordavyn Reference — typed pointer to another AIM object (AIM §10.1).
 
     Carries: declared target type, target Identifier, optional closure version.
     Target MUST be a non-Reference AIM object.
@@ -106,6 +112,12 @@ class Reference:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Reference":
+        if not isinstance(d, dict) or not {"target_type", "target_id"} <= d.keys() or d.keys() - {"target_type", "target_id", "closure_version"}:
+            raise ValueError("invalid reference fields")
+        if (type(d['target_type']) is not str or not d['target_type'] or len(d['target_type']) > 256
+                or (d.get('closure_version') is not None and
+                    (type(d['closure_version']) is not int or not 0 <= d['closure_version'] < 2**64))):
+            raise ValueError("invalid reference metadata")
         return cls(
             target_type=d["target_type"],
             target_id=Identifier.from_dict(d["target_id"]),
@@ -149,6 +161,10 @@ class Instant:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Instant":
+        if not isinstance(d, dict) or set(d) != {"nanos"}:
+            raise ValueError("invalid instant fields")
+        if type(d['nanos']) is not int or not 0 <= d['nanos'] < 2**64:
+            raise ValueError("invalid instant metadata")
         return cls(nanos=d["nanos"])
 
     def __str__(self) -> str:
