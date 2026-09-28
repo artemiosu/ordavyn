@@ -131,6 +131,13 @@ impl Ed25519Keypair {
         }
     }
 
+    /// Import a 32-byte Ed25519 seed.
+    pub fn from_seed(seed: [u8; 32]) -> Self {
+        Self {
+            signing_key: SigningKey::from_bytes(&seed),
+        }
+    }
+
     /// Get the public key.
     pub fn public_key(&self) -> Ed25519PublicKey {
         self.signing_key.verifying_key().into()

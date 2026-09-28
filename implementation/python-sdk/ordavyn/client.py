@@ -4,9 +4,9 @@ import socket
 import time
 from .message import Message, MessageType
 from .security import valid_endpoint, MAX_BODY, MAX_HEADERS, TIMEOUT
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 VERSION_HEADER = 'x-ordavyn-version'
-PATH_PREFIX = '/ordavyn/v1'
+PATH_PREFIX = '/ordavyn/v2'
 CONTENT_TYPE = 'application/json'
 
 
@@ -42,7 +42,7 @@ class OrdavynClient:
                     raise ValueError('truncated response')
                 return data
             header = (f'POST {PATH_PREFIX}{endpoint} HTTP/1.1\r\nHost: {self.host}:{self.port}\r\n'
-                      f'Content-Type: {CONTENT_TYPE}\r\n{VERSION_HEADER}: 1\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n')
+                      f'Content-Type: {CONTENT_TYPE}\r\n{VERSION_HEADER}: 2\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n')
             conn.sendall(header.encode('ascii') + body)
             raw = b''
             while b'\r\n\r\n' not in raw:
@@ -61,7 +61,7 @@ class OrdavynClient:
                 if key in headers:
                     raise ValueError('duplicate response header')
                 headers[key] = value.strip()
-            if (version != 'HTTP/1.1' or headers.get(VERSION_HEADER) != '1'
+            if (version != 'HTTP/1.1' or headers.get(VERSION_HEADER) != '2'
                     or headers.get('content-type') != CONTENT_TYPE or 'transfer-encoding' in headers):
                 raise ValueError('invalid response metadata')
             length_text = headers.get('content-length', '')
@@ -74,7 +74,7 @@ class OrdavynClient:
                 data += receive(min(4096, length - len(data)))
             from .server import strict_json
             result = Message.from_dict(strict_json(data))
-            if (type(result.version) is not int or result.version != 1 or result.encoding != 'json'
+            if (type(result.version) is not int or result.version != 2 or result.encoding != 'ordavyn-cbor-v2'
                     or result.msg_type not in (MessageType.RESPONSE, MessageType.ERROR)
                     or result.from_id != msg.to_id or result.to_id != msg.from_id
                     or result.operation_id != msg.operation_id or result.subject != msg.subject

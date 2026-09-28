@@ -25,6 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "cryptography>=42.0",
+    "cbor2==5.9.0",
 ]
 
 [tool.setuptools.packages.find]

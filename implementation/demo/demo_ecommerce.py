@@ -1,4 +1,4 @@
-"""Local simulated order; no real purchases. Run after installing the SDK."""
+"""Local wire-v2 simulated order; no real purchases. Run after installing the SDK."""
 from ordavyn import Ordavyn, Identifier, MessageBuilder, MessageType, Ed25519Keypair
 
 

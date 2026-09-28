@@ -10,8 +10,6 @@ Algorithm registry (BC v1.1.0 §3.8):
 """
 
 import hashlib
-import json
-import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -102,28 +100,6 @@ def sha256_digest(data: bytes) -> bytes:
 
 
 def canonical_json_bytes(obj: dict) -> bytes:
-    """Serialize dict to canonical JSON bytes (deterministic, sorted keys).
-
-    Used for message signing in the Python SDK (prototype).
-    CBOR signing interoperability with Rust is not implemented.
-    """
-    def validate(value):
-        if value is None or type(value) in (str, bool, int):
-            return
-        if type(value) is float:
-            if not math.isfinite(value):
-                raise ValueError("nonfinite JSON number")
-            return
-        if type(value) is list:
-            for item in value:
-                validate(item)
-            return
-        if type(value) is dict:
-            for key, item in value.items():
-                if type(key) is not str:
-                    raise ValueError("JSON object keys must be strings")
-                validate(item)
-            return
-        raise ValueError("unsupported JSON value type")
-    validate(obj)
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    """Compatibility helper for deterministic transport JSON, never signing bytes."""
+    from .wire import json_bytes
+    return json_bytes(obj)

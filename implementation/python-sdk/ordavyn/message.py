@@ -1,9 +1,8 @@
 """Local Ordavyn message envelope with Ed25519-authenticated metadata.
 
-Python signs deterministic JSON; no COSE encoding, PQ or negotiation is implemented.
+Python signs domain-separated deterministic CBOR v2; transport is JSON.
 """
 
-import json
 import time
 import uuid
 import hashlib
@@ -11,7 +10,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Any
 
 from .aim import Identifier, Reference, Instant
-from .crypto import Ed25519Keypair, canonical_json_bytes, ALG_ED25519
+from .crypto import Ed25519Keypair, ALG_ED25519
+from .wire import ENCODING, json_bytes, signable_bytes, validate_envelope
 
 
 class MessageType:
@@ -24,8 +24,8 @@ class MessageType:
 
 @dataclass
 class Message:
-    """Local envelope; only Ed25519 and the fixed JSON signing format are supported."""
-    version: int = 1
+    """Local envelope; only Ed25519 and the fixed CBOR v2 signing format are supported."""
+    version: int = 2
     msg_type: str = MessageType.REQUEST
     id: Identifier = field(default_factory=lambda: Identifier("message", "placeholder"))
     operation_id: Identifier = field(default_factory=lambda: Identifier("logical-operation", "placeholder"))
@@ -38,7 +38,7 @@ class Message:
     key_id: Optional[str] = None
     signature: Optional[str] = None  # hex-encoded
     timestamp: Instant = field(default_factory=lambda: Instant(nanos=0))
-    encoding: str = "json"
+    encoding: str = ENCODING
 
     def is_signed(self) -> bool:
         return self.signature is not None
@@ -47,19 +47,24 @@ class Message:
         """Sign this message with an Ed25519 keypair.
 
         Uses PureEdDSA (RFC 8032, direct signing, NO pre-hash).
-        Signs the canonical JSON encoding of the signable fields.
+        Signs the canonical CBOR encoding of the signable fields.
         """
-        self.signature_alg = ALG_ED25519
-        self.key_id = keypair.key_id()
-        signable = self._signable_bytes()
-        sig_bytes = keypair.sign(signable)
-        self.signature = sig_bytes.hex()
+        import copy
+        candidate = copy.copy(self)
+        candidate.signature_alg = ALG_ED25519
+        candidate.key_id = keypair.key_id()
+        candidate.signature = None
+        candidate.signature = keypair.sign(candidate._signable_bytes()).hex()
+        validate_envelope(candidate._raw_dict())
+        self.signature_alg = candidate.signature_alg
+        self.key_id = candidate.key_id
+        self.signature = candidate.signature
 
     def verify_signature(self, public_key_bytes: bytes) -> bool:
         """Verify this message's signature."""
         try:
             if (self.signature_alg != ALG_ED25519 or type(self.signature_alg) is not int
-                    or self.encoding != "json" or not isinstance(self.signature, str)
+                    or self.encoding != ENCODING or not isinstance(self.signature, str)
                     or len(self.signature) != 128
                     or self.key_id != hashlib.sha256(public_key_bytes).digest()[:8].hex()):
                 return False
@@ -69,24 +74,9 @@ class Message:
 
     def _signable_bytes(self) -> bytes:
         """Get canonical bytes that are signed (message without the signature value)."""
-        signable = {
-            "version": self.version,
-            "signature_alg": self.signature_alg,
-            "key_id": self.key_id,
-            "encoding": self.encoding,
-            "type": self.msg_type,
-            "id": self.id.to_dict(),
-            "operation_id": self.operation_id.to_dict(),
-            "subject": self.subject.to_dict(),
-            "from": self.from_id.to_dict(),
-            "to": self.to_id.to_dict(),
-            "epoch": self.epoch.to_dict(),
-            "payload": self.payload,
-            "timestamp": self.timestamp.to_dict(),
-        }
-        return canonical_json_bytes(signable)
+        return signable_bytes(self._raw_dict())
 
-    def to_dict(self) -> dict:
+    def _raw_dict(self) -> dict:
         """Serialize message to dict for JSON transport."""
         d = {
             "version": self.version,
@@ -101,28 +91,18 @@ class Message:
             "timestamp": self.timestamp.to_dict(),
             "encoding": self.encoding,
         }
-        if self.signature_alg is not None:
-            d["signature_alg"] = self.signature_alg
-        if self.key_id is not None:
-            d["key_id"] = self.key_id
-        if self.signature is not None:
-            d["signature"] = self.signature
+        d.update(signature_alg=self.signature_alg, key_id=self.key_id, signature=self.signature)
+        return d
+
+    def to_dict(self) -> dict:
+        d = self._raw_dict()
+        validate_envelope(d)
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "Message":
         """Deserialize message from dict."""
-        required = {"version", "type", "id", "operation_id", "subject", "from", "to", "epoch", "payload", "timestamp", "encoding"}
-        if not isinstance(d, dict) or not required <= d.keys() or d.keys() - required - {"signature_alg", "key_id", "signature"}:
-            raise ValueError("invalid envelope fields")
-        if (type(d['version']) is not int or d['version'] != 1
-                or type(d['type']) is not str or d['type'] not in ('request', 'response', 'event', 'error')
-                or d['encoding'] != 'json'
-                or (d.get('signature_alg') is not None and type(d['signature_alg']) is not int)
-                or (d.get('key_id') is not None and type(d['key_id']) is not str)
-                or (d.get('signature') is not None and type(d['signature']) is not str)):
-            raise ValueError("invalid envelope metadata")
-        canonical_json_bytes(d)
+        validate_envelope(d)
         msg = cls(
             version=d["version"],
             msg_type=d["type"],
@@ -150,7 +130,7 @@ class Message:
 
     def to_json(self) -> str:
         """Serialize to JSON string."""
-        return canonical_json_bytes(self.to_dict()).decode("utf-8")
+        return json_bytes(self.to_dict()).decode("utf-8")
 
 
 class MessageBuilder:

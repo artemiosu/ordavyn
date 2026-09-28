@@ -1,6 +1,5 @@
 """Protected standalone loopback HTTP/1.1 prototype server."""
 import copy
-import json
 import socket
 import threading
 import time
@@ -10,15 +9,7 @@ from .security import SecurityPolicy, SecurityError, valid_endpoint, MAX_BODY, M
 from .client import OrdavynClient, PATH_PREFIX, VERSION_HEADER
 
 
-def strict_json(data):
-    def pairs(items):
-        result = {}
-        for key, value in items:
-            if key in result:
-                raise ValueError('duplicate JSON key')
-            result[key] = value
-        return result
-    return json.loads(data, object_pairs_hook=pairs, parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite JSON')))
+from .wire import strict_json, validate_envelope
 
 
 class Ordavyn:
@@ -56,8 +47,7 @@ class Ordavyn:
         response = (MessageBuilder(self.security.recipient, msg.from_id)
                     .operation_id(msg.operation_id).subject(msg.subject).epoch(msg.epoch).build())
         try:
-            if len(msg.to_json().encode('utf-8')) > MAX_BODY:
-                raise SecurityError('message too large')
+            validate_envelope(msg.to_dict())
             action = msg.payload.get('action') if isinstance(msg.payload, dict) else None
             if not isinstance(action, str) or not valid_endpoint('/' + action):
                 raise SecurityError('invalid action')
@@ -73,8 +63,7 @@ class Ordavyn:
             result = handler(**params)
             response.msg_type = MessageType.RESPONSE
             response.payload = result if isinstance(result, dict) else {'result': result}
-            if len(response.to_json().encode('utf-8')) > MAX_BODY:
-                raise SecurityError('response too large')
+            validate_envelope(response.to_dict())
         except Exception as exc:
             response.msg_type = MessageType.ERROR
             response.payload = {'error': str(exc) if isinstance(exc, SecurityError) else 'handler_or_input_error'}
@@ -110,7 +99,7 @@ class Ordavyn:
                 if k in headers:
                     raise ValueError('duplicate header')
                 headers[k] = v.strip()
-            if (method != 'POST' or http_version != 'HTTP/1.1' or headers.get(VERSION_HEADER) != '1'
+            if (method != 'POST' or http_version != 'HTTP/1.1' or headers.get(VERSION_HEADER) != '2'
                     or headers.get('content-type') != 'application/json' or 'transfer-encoding' in headers):
                 raise ValueError('unsupported HTTP metadata')
             length_text = headers.get('content-length', '')
@@ -123,7 +112,14 @@ class Ordavyn:
                 data += receive(min(4096, length - len(data)))
             msg = Message.from_dict(strict_json(data))
             response = self._handle_request(msg, path)
-            body = response.to_json().encode('utf-8')
+            try:
+                body = response.to_json().encode('utf-8')
+            except ValueError as exc:
+                if str(exc) != 'body exceeds 64KiB':
+                    raise
+                response.msg_type = MessageType.ERROR
+                response.payload = {'error': 'response exceeds HTTP byte limit; effect may have occurred'}
+                body = response.to_json().encode('utf-8')
             status = 200 if response.msg_type == MessageType.RESPONSE else 403
         except Exception:
             pass
@@ -132,7 +128,7 @@ class Ordavyn:
             if remaining <= 0:
                 raise TimeoutError('response deadline')
             conn.settimeout(remaining)
-            conn.sendall((f'HTTP/1.1 {status} Result\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 1\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n').encode('ascii') + body)
+            conn.sendall((f'HTTP/1.1 {status} Result\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 2\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n').encode('ascii') + body)
         except OSError:
             pass
         finally:

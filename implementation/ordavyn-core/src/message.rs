@@ -1,13 +1,9 @@
 //! Local Ordavyn message envelope with Ed25519-authenticated metadata.
-//! Rust signs a fixed CBOR array; COSE encoding, PQ and negotiation are not implemented.
+//! Rust signs the domain-separated deterministic CBOR v2 map; transport is JSON.
 
 use crate::aim::{Identifier, Instant, Reference};
-use crate::cbor_encoding::{
-    canonical_bytes, identifier_to_cbor, instant_to_cbor, reference_to_cbor,
-};
 use crate::crypto::{Ed25519Keypair, Ed25519Signature, SignatureAlgorithm};
 use crate::error::{CoreError, Result};
-use ciborium::value::Value;
 use serde::{Deserialize, Serialize};
 
 /// Message type (BC v1.1.0 §4.1).
@@ -24,9 +20,10 @@ pub enum MessageType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Message {
-    /// Protocol version (currently 1).
+    /// Protocol version (currently 2).
     pub version: u8,
     /// Message type.
+    #[serde(rename = "type")]
     pub msg_type: MessageType,
     /// Message ID (AIM §3.5 — unique per message).
     pub id: Identifier,
@@ -43,14 +40,17 @@ pub struct Message {
     /// Message-specific payload.
     pub payload: serde_json::Value,
     /// Signature algorithm (BC §3.8 registry). None for unsigned messages.
+    #[serde(with = "crate::wire::algorithm")]
     pub signature_alg: Option<SignatureAlgorithm>,
     /// Verifier key identifier. None for unsigned messages.
+    #[serde(deserialize_with = "crate::wire::required_option")]
     pub key_id: Option<String>,
     /// Variable-length signature. None for unsigned messages.
+    #[serde(with = "crate::wire::signature")]
     pub signature: Option<Ed25519Signature>,
     /// Send time (AIM §8.1).
     pub timestamp: Instant,
-    /// Fixed signing representation "cbor"; JSON transport does not negotiate it.
+    /// Fixed signing representation "ordavyn-cbor-v2"; JSON transport does not negotiate it.
     pub encoding: String,
 }
 
@@ -65,18 +65,14 @@ impl Message {
     /// Uses PureEdDSA (RFC 8032, direct signing, NO pre-hash).
     /// Signs the canonical CBOR encoding of the message (excluding only the signature value).
     pub fn sign(&mut self, keypair: &Ed25519Keypair) -> Result<()> {
-        self.signature_alg = Some(SignatureAlgorithm::Ed25519);
-        self.key_id = Some(keypair.key_id());
-        // Metadata is authenticated along with payload.
-        let signable_bytes = self.canonical_signable_bytes()?;
-
-        // Sign using PureEdDSA (BC v1.1.0 §6.1 — direct, no pre-hash)
-        let sig = keypair.sign(&signable_bytes);
-
-        self.signature_alg = Some(SignatureAlgorithm::Ed25519);
-        self.key_id = Some(keypair.key_id());
-        self.signature = Some(sig);
-
+        let mut candidate = self.clone();
+        candidate.signature_alg = Some(SignatureAlgorithm::Ed25519);
+        candidate.key_id = Some(keypair.key_id());
+        candidate.signature = None;
+        let signable_bytes = candidate.canonical_signable_bytes()?;
+        candidate.signature = Some(keypair.sign(&signable_bytes));
+        crate::wire::validate(&candidate, false)?;
+        *self = candidate;
         Ok(())
     }
 
@@ -91,7 +87,7 @@ impl Message {
 
         if self.signature_alg != Some(SignatureAlgorithm::Ed25519)
             || self.key_id.as_deref() != Some(public_key.key_id().as_str())
-            || self.encoding != "cbor"
+            || self.encoding != "ordavyn-cbor-v2"
             || sig.algorithm != SignatureAlgorithm::Ed25519
         {
             return Err(CoreError::InvalidMessage(
@@ -103,68 +99,9 @@ impl Message {
         Ed25519Keypair::verify(public_key, &signable_bytes, sig)
     }
 
-    /// Get the canonical bytes that are signed (message without the signature value).
-    ///
-    /// Uses canonical CBOR encoding (RFC 8949 §4.2.1, BC v1.1.0 §8.2).
-    /// Signable fields are encoded as a CBOR array (field order is deterministic by construction).
-    /// AIM types use custom CBOR tags (40001-40005 per BC §8.1).
-    fn canonical_signable_bytes(&self) -> Result<Vec<u8>> {
-        // Build CBOR array with fields in fixed order (deterministic by construction)
-        let payload_cbor = json_to_cbor(&self.payload);
-        let signable = Value::Array(vec![
-            Value::Integer(self.version.into()),
-            Value::Text(format!("{:?}", self.msg_type).to_lowercase()),
-            identifier_to_cbor(&self.id),
-            identifier_to_cbor(&self.operation_id),
-            reference_to_cbor(&self.subject),
-            identifier_to_cbor(&self.from),
-            identifier_to_cbor(&self.to),
-            identifier_to_cbor(&self.epoch),
-            payload_cbor,
-            instant_to_cbor(&self.timestamp),
-            self.signature_alg
-                .map(|a| Value::Integer(a.id().into()))
-                .unwrap_or(Value::Null),
-            self.key_id.clone().map(Value::Text).unwrap_or(Value::Null),
-            Value::Text(self.encoding.clone()),
-        ]);
-
-        canonical_bytes(&signable)
-    }
-}
-
-/// Convert a serde_json::Value to a ciborium::Value for CBOR encoding.
-fn json_to_cbor(json: &serde_json::Value) -> Value {
-    match json {
-        serde_json::Value::Null => Value::Null,
-        serde_json::Value::Bool(b) => Value::Bool(*b),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Value::Integer(i.into())
-            } else if let Some(u) = n.as_u64() {
-                Value::Integer(u.into())
-            } else if let Some(f) = n.as_f64() {
-                Value::Float(f)
-            } else {
-                Value::Null
-            }
-        }
-        serde_json::Value::String(s) => Value::Text(s.clone()),
-        serde_json::Value::Array(arr) => Value::Array(arr.iter().map(json_to_cbor).collect()),
-        serde_json::Value::Object(obj) => {
-            // Preserve the object type; arrays and maps must never sign identically.
-            let mut entries: Vec<(String, Value)> = obj
-                .iter()
-                .map(|(k, v)| (k.clone(), json_to_cbor(v)))
-                .collect();
-            entries.sort_by(|a, b| a.0.len().cmp(&b.0.len()).then_with(|| a.0.cmp(&b.0)));
-            Value::Map(
-                entries
-                    .into_iter()
-                    .map(|(k, v)| (Value::Text(k), v))
-                    .collect(),
-            )
-        }
+    /// Domain-separated RFC8949 length-first deterministic CBOR v2.
+    pub fn canonical_signable_bytes(&self) -> Result<Vec<u8>> {
+        crate::wire::signable_bytes(self)
     }
 }
 
@@ -177,7 +114,7 @@ impl MessageBuilder {
     pub fn new(from: Identifier, to: Identifier) -> Self {
         Self {
             msg: Message {
-                version: 1,
+                version: 2,
                 msg_type: MessageType::Request,
                 id: Identifier::new("message", &uuid_like()),
                 operation_id: Identifier::new("logical-operation", &uuid_like()),
@@ -193,7 +130,7 @@ impl MessageBuilder {
                 key_id: None,
                 signature: None,
                 timestamp: Instant::from_nanos(0),
-                encoding: "cbor".to_string(),
+                encoding: "ordavyn-cbor-v2".to_string(),
             },
         }
     }
@@ -261,7 +198,7 @@ mod tests {
             .payload(serde_json::json!({"action": "search", "query": "laptop"}))
             .build();
 
-        assert_eq!(msg.version, 1);
+        assert_eq!(msg.version, 2);
         assert_eq!(msg.msg_type, MessageType::Request);
         assert_eq!(msg.from, from);
         assert_eq!(msg.to, to);

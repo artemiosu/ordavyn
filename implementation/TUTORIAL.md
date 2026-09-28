@@ -51,3 +51,11 @@ Passing a framework app to `Ordavyn(app=...)` raises an error: FastAPI/Flask ada
 are not implemented. The standalone server uses the same security gate as direct
 `_handle_request` calls. Calling a decorated Python function yourself is ordinary
 application code, outside protocol dispatch.
+
+The examples now use experimental wire v2: `/ordavyn/v2/<action>`,
+`x-ordavyn-version: 2`, and shared Python/Rust CBOR signing. No v1 fallback exists.
+To check actual cross-language exchange, build the Rust test peer with
+`cargo build --manifest-path implementation/Cargo.toml --locked --example interop_peer`
+from the repository root, then run `implementation/tests/test_interop.py` using the
+installed Python environment. The runner creates only loopback servers, has process
+and socket deadlines, verifies handler counters after refusals, and cleans up.

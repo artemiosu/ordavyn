@@ -4,8 +4,8 @@ Local prototype, not an approved release. Native Architecture-First describes a
 standalone, role-neutral protocol; the current code implements a small local subset.
 
 - Rust crate: `ordavyn-core`; Python distribution/import: `ordavyn`.
-- HTTP/1.1 JSON transport on loopback only; route `/ordavyn/v1/<action>` and
-  mandatory header `x-ordavyn-version: 1`. Previous wire names are incompatible.
+- HTTP/1.1 JSON transport on loopback only; route `/ordavyn/v2/<action>` and
+  mandatory header `x-ordavyn-version: 2`. Previous wire names are incompatible.
 - Every action requires Ed25519 authentication and an explicit local grant tying
   its public key to a participant, this server's recipient and allowed actions.
 - Message ID and logical operation ID are atomically reserved before the handler.
@@ -18,15 +18,17 @@ standalone, role-neutral protocol; the current code implements a small local sub
 
 ## Signed formats
 
-Python signs sorted compact UTF-8 JSON including all envelope fields except the
-signature itself. Rust signs a fixed-order CBOR array containing version, type,
-message ID, operation ID, subject, sender, recipient, epoch, payload, timestamp,
-algorithm ID, key ID and encoding. AIM values use CBOR tags; JSON objects become
-CBOR maps and arrays stay arrays. Algorithm, key ID and encoding are authenticated.
-Rust's JSON envelope represents signatures and message types differently from
-Python. These SDKs are **not signature- or wire-interoperable** with each other;
-shared interoperable serialization is future work. Encoding identifies signing
-representation (`cbor` in Rust, `json` in Python), while transport is JSON in both.
+Both SDKs use the experimental [local wire v2 contract](../docs/LOCAL-WIRE-V2.md).
+They sign the ASCII domain `ordavyn:v2:message\0` followed by the deterministic
+CBOR map of all envelope fields except `signature`. JSON remains the only network
+format. All envelope and AIM fields are required, including explicit optional nulls.
+Algorithm 1, lowercase key IDs and signature hex are shared by both SDKs.
+Version 1 and previous signing encodings are rejected without fallback.
+The complete JSON tree has a depth limit of 32 and fixed integer/float rules.
+
+Python pins cbor2 5.9.0 and uses its Python canonical encoder: its C accelerator
+fails the shortest-float rule for 65504.0. Frozen vectors cover this boundary.
+Legacy tagged AIM CBOR helpers are separate from wire v2 and are not its codec.
 
 ## Local verification
 
@@ -37,6 +39,7 @@ cargo test --workspace --locked
 cargo build --workspace --release --locked
 python -m pip install ./python-sdk pytest build
 python -m pytest python-sdk/tests -q
+cargo build --locked --example interop_peer
 python tests/test_conformance.py
 python -m build python-sdk
 ```

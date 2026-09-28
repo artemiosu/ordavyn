@@ -8,8 +8,8 @@ use tokio::net::{TcpListener, TcpStream};
 pub const CONTENT_TYPE_JSON: &str = "application/json";
 pub const CONTENT_TYPE_CBOR: &str = "application/cbor";
 pub const VERSION_HEADER: &str = "x-ordavyn-version";
-pub const PROTOCOL_VERSION: u8 = 1;
-pub const PATH_PREFIX: &str = "/ordavyn/v1";
+pub const PROTOCOL_VERSION: u8 = 2;
+pub const PATH_PREFIX: &str = "/ordavyn/v2";
 type Handler = Arc<dyn Fn(Message) -> Message + Send + Sync>;
 #[derive(Clone)]
 pub struct OrdavynServer {
@@ -53,13 +53,7 @@ impl OrdavynServer {
     }
     /// All direct and HTTP calls pass this gate. Failed actions retain their reservation.
     pub fn dispatch(&self, path: &str, msg: &Message) -> Result<Message> {
-        if serde_json::to_vec(msg)
-            .map_err(|_| invalid("serialization"))?
-            .len()
-            > MAX_BODY
-        {
-            return Err(invalid("message too large"));
-        }
+        crate::wire::validate(msg, false)?;
         let action = path
             .strip_prefix(&format!("{PATH_PREFIX}/"))
             .ok_or_else(|| invalid("route mismatch"))?;
@@ -93,6 +87,7 @@ impl OrdavynServer {
                 response.payload = serde_json::json!({"error":"handler failed"});
             }
         }
+        crate::wire::validate(&response, false)?;
         Ok(response)
     }
     pub async fn serve(&self, addr: &str) -> Result<()> {
@@ -138,10 +133,14 @@ impl OrdavynServer {
             }
             check_headers(&headers)?;
             let msg: Message = crate::json::message(&body)?;
-            let response = self.dispatch(parts[1], &msg)?;
+            let mut response = self.dispatch(parts[1], &msg)?;
+            // Dispatch already validated the model. Only the actual JSON byte
+            // budget can fail here; retain correlation and the replay reservation.
             let bytes = serde_json::to_vec(&response).map_err(|_| invalid("invalid response"))?;
             if bytes.len() > MAX_BODY {
-                return Err(invalid("response too large"));
+                response.msg_type = MessageType::Error;
+                response.payload = serde_json::json!({"error":"response exceeds HTTP byte limit; effect may have occurred"});
+                return crate::wire::to_json(&response);
             }
             Ok(bytes)
         }
@@ -165,7 +164,7 @@ async fn local_listener(addr: &str) -> Result<TcpListener> {
         .map_err(|_| invalid("bind failed"))
 }
 fn check_headers(headers: &HashMap<String, String>) -> Result<()> {
-    if headers.get(VERSION_HEADER).map(String::as_str) != Some("1")
+    if headers.get(VERSION_HEADER).map(String::as_str) != Some("2")
         || headers.get("content-type").map(String::as_str) != Some(CONTENT_TYPE_JSON)
         || headers.contains_key("transfer-encoding")
     {
@@ -243,7 +242,7 @@ async fn read_http(socket: &mut TcpStream) -> Result<(String, HashMap<String, St
     Ok((line, headers, body))
 }
 async fn write_http(socket: &mut TcpStream, status: u16, body: &[u8]) -> Result<()> {
-    let head = format!("HTTP/1.1 {status} Result\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+    let head = format!("HTTP/1.1 {status} Result\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 2\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
     socket
         .write_all(head.as_bytes())
         .await
@@ -281,14 +280,14 @@ impl OrdavynClient {
         if !addr.ip().is_loopback() {
             return Err(invalid("loopback only"));
         }
-        let body = serde_json::to_vec(msg).map_err(|_| invalid("serialization"))?;
+        let body = crate::wire::to_json(msg).map_err(|_| invalid("serialization"))?;
         if body.len() > MAX_BODY {
             return Err(invalid("body limit"));
         }
         let mut socket = TcpStream::connect(addr)
             .await
             .map_err(|_| invalid("connect failed"))?;
-        let header = format!("POST {PATH_PREFIX}{endpoint} HTTP/1.1\r\nHost: {host}\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+        let header = format!("POST {PATH_PREFIX}{endpoint} HTTP/1.1\r\nHost: {host}\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 2\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
         socket
             .write_all(header.as_bytes())
             .await
@@ -303,8 +302,8 @@ impl OrdavynClient {
             return Err(invalid("HTTP request rejected"));
         }
         let result: Message = crate::json::message(&body)?;
-        if result.version != 1
-            || result.encoding != "cbor"
+        if result.version != 2
+            || result.encoding != crate::wire::ENCODING
             || !matches!(result.msg_type, MessageType::Response | MessageType::Error)
             || result.from != msg.to
             || result.to != msg.from

@@ -58,17 +58,17 @@ class Identifier:
         return self._validate_namespace() and bool(self.value)
 
     def to_dict(self) -> dict:
-        d = {"namespace": self.namespace, "value": self.value}
+        d = {"namespace": self.namespace, "value": self.value, "version": self.version}
         if self.version is not None:
             d["version"] = self.version
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "Identifier":
-        if not isinstance(d, dict) or not {"namespace", "value"} <= d.keys() or d.keys() - {"namespace", "value", "version"}:
+        if not isinstance(d, dict) or set(d) != {"namespace", "value", "version"} or d.keys() - {"namespace", "value", "version"}:
             raise ValueError("invalid identifier fields")
         if (type(d['namespace']) is not str or type(d['value']) is not str
-                or not d['value'] or len(d['value']) > 256 or len(d['namespace']) > 256
+                or not d['value'] or len(d['value'].encode("utf-8")) > 256 or len(d['namespace'].encode("utf-8")) > 256
                 or (d.get('version') is not None and (type(d['version']) is not int or not 0 <= d['version'] < 2**64))):
             raise ValueError("invalid identifier metadata")
         return cls(
@@ -105,16 +105,16 @@ class Reference:
     closure_version: Optional[int] = None
 
     def to_dict(self) -> dict:
-        d = {"target_type": self.target_type, "target_id": self.target_id.to_dict()}
+        d = {"target_type": self.target_type, "target_id": self.target_id.to_dict(), "closure_version": self.closure_version}
         if self.closure_version is not None:
             d["closure_version"] = self.closure_version
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "Reference":
-        if not isinstance(d, dict) or not {"target_type", "target_id"} <= d.keys() or d.keys() - {"target_type", "target_id", "closure_version"}:
+        if not isinstance(d, dict) or set(d) != {"target_type", "target_id", "closure_version"} or d.keys() - {"target_type", "target_id", "closure_version"}:
             raise ValueError("invalid reference fields")
-        if (type(d['target_type']) is not str or not d['target_type'] or len(d['target_type']) > 256
+        if (type(d['target_type']) is not str or not d['target_type'] or len(d['target_type'].encode("utf-8")) > 256
                 or (d.get('closure_version') is not None and
                     (type(d['closure_version']) is not int or not 0 <= d['closure_version'] < 2**64))):
             raise ValueError("invalid reference metadata")

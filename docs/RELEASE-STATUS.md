@@ -13,7 +13,9 @@ wheel/sdist contents; simulations using the SDK's protected server.
 Limitations: journal state lasts one process and is never evicted; a restart loses
 replay protection. Handler failure does not undo an effect and does not release its
 reservation. Handlers themselves are application code and have no execution timeout.
-Rust CBOR and Python JSON signatures/envelopes are not interoperable. Responses are
+Python and Rust now implement a shared experimental local wire v2 envelope and
+domain-separated deterministic CBOR signatures; see [LOCAL-WIRE-V2.md](LOCAL-WIRE-V2.md).
+Version 1 is explicitly incompatible and is rejected. Responses are
 unsigned. Delegation, negotiation, PQ and TLS are not implemented. No production,
 real transactions or public network exposure is authorized.
 
@@ -61,3 +63,29 @@ metadata declares Apache-2.0 and retains `publish = false`. The Rust package
 file list includes LICENSE. No runtime code changed; the behavioral test counts
 above refer to the preceding implementation verification, not a new test run.
 The pre-push hook is byte-for-byte unchanged.
+
+Wire v2 implementation (2026-09-28): strict JSON transport and direct API validation
+now agree on mandatory envelope/AIM fields, scalar Unicode, 256-byte AIM strings,
+integer boundaries, finite binary64 values and tree depth <=32. The old tagged AIM
+CBOR helpers are not used for v2 signing. Python pins cbor2 5.9.0's Python canonical
+encoder to avoid the C accelerator's non-shortest encoding at 65504.0. These changes
+do not close architecture release conditions or authorize publication. Fresh test
+evidence is recorded separately from the historical September 27 results above.
+
+Wire v2 size correction (2026-09-28): all model APIs use the same 64 KiB
+deterministic CBOR budget, including the signature. HTTP applies its separate
+64 KiB cap to actual input/output bytes, without receiver-specific JSON
+reserialization. Live checks include independent signed-invalid-shape requests,
+recovery with the rejected IDs, separate message/operation replay, small journal
+exhaustion, numeric/optional vectors and an exact 65536-byte input in both directions.
+
+Итог проверки wire v2 (2026-09-28): 74 теста Rust и release build прошли;
+по 146 тестов Python прошли после независимой установки wheel и sdist вне
+исходного дерева. В каждом окружении проверены оба направления живого обмена
+(12 эффектов и 31 отказ на направление), оба демо и пример README. Два прохода
+трёх направлений BMAD ревью завершены; принятые исправления проверены.
+
+Отложенное ограничение R2-B4: Python возвращает HTTP 403 при ошибке обработчика,
+а Rust-клиент отклоняет такой статус до разбора тела ошибки. Успешный обмен
+совместим; одинаковая обработка всех ошибок между SDK пока не обеспечена.
+Результаты относятся к локальному прототипу и не разрешают публикацию.

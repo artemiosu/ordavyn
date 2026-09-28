@@ -71,9 +71,10 @@ impl SecurityPolicy {
         Ok(())
     }
     pub fn authorize_and_reserve(&self, msg: &Message, action: &str) -> Result<()> {
-        if msg.version != 1
+        crate::wire::validate(msg, false)?;
+        if msg.version != 2
             || msg.msg_type != MessageType::Request
-            || msg.encoding != "cbor"
+            || msg.encoding != crate::wire::ENCODING
             || msg.to != self.recipient
             || msg.from.namespace != "participant"
             || msg.id.namespace != "message"

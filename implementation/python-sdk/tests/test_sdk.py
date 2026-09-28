@@ -182,7 +182,7 @@ def test_message_builder():
     from_id = Identifier("participant", "alice")
     to_id = Identifier("participant", "bob")
     msg = MessageBuilder(from_id, to_id).payload({"action": "search"}).build()
-    assert msg.version == 1
+    assert msg.version == 2
     assert msg.msg_type == MessageType.REQUEST
     assert msg.from_id == from_id
     assert msg.to_id == to_id

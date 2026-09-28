@@ -1,0 +1,392 @@
+{
+  "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "vectors": [
+    {
+      "name": "unicode-order",
+      "message": {
+        "version": 2,
+        "type": "request",
+        "id": {
+          "namespace": "message",
+          "value": "unicode-order",
+          "version": null
+        },
+        "operation_id": {
+          "namespace": "logical-operation",
+          "value": "unicode-order",
+          "version": null
+        },
+        "subject": {
+          "target_type": "DecisionSubject",
+          "target_id": {
+            "namespace": "decision-subject",
+            "value": "placeholder",
+            "version": null
+          },
+          "closure_version": null
+        },
+        "from": {
+          "namespace": "participant",
+          "value": "caller",
+          "version": null
+        },
+        "to": {
+          "namespace": "participant",
+          "value": "service",
+          "version": null
+        },
+        "epoch": {
+          "namespace": "epoch",
+          "value": "current",
+          "version": null
+        },
+        "payload": {
+          "action": "act",
+          "z": "é",
+          "aa": "é",
+          "я": "雪",
+          "a": {
+            "z": 1,
+            "aa": 2
+          }
+        },
+        "timestamp": {
+          "nanos": 0
+        },
+        "encoding": "ordavyn-cbor-v2",
+        "signature_alg": 1,
+        "key_id": "56475aa75463474c",
+        "signature": "38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f"
+      },
+      "signable_hex": "6f72646176796e3a76323a6d65737361676500ad626964a36576616c75656d756e69636f64652d6f726465726776657273696f6ef6696e616d657370616365676d65737361676562746fa36576616c756567736572766963656776657273696f6ef6696e616d6573706163656b7061727469636970616e746466726f6da36576616c75656663616c6c65726776657273696f6ef6696e616d6573706163656b7061727469636970616e74647479706567726571756573746565706f6368a36576616c75656763757272656e746776657273696f6ef6696e616d6573706163656565706f6368666b65795f69647035363437356161373534363334373463677061796c6f6164a56161a2617a0162616102617a62c3a96261616365cc8162d18f63e99baa66616374696f6e63616374677375626a656374a3697461726765745f6964a36576616c75656b706c616365686f6c6465726776657273696f6ef6696e616d657370616365706465636973696f6e2d7375626a6563746b7461726765745f747970656f4465636973696f6e5375626a6563746f636c6f737572655f76657273696f6ef66776657273696f6e0268656e636f64696e676f6f72646176796e2d63626f722d76326974696d657374616d70a1656e616e6f73006c6f7065726174696f6e5f6964a36576616c75656d756e69636f64652d6f726465726776657273696f6ef6696e616d657370616365716c6f676963616c2d6f7065726174696f6e6d7369676e61747572655f616c6701",
+      "signature_hex": "38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f"
+    },
+    {
+      "name": "null-empty",
+      "message": {
+        "version": 2,
+        "type": "request",
+        "id": {
+          "namespace": "message",
+          "value": "null-empty",
+          "version": null
+        },
+        "operation_id": {
+          "namespace": "logical-operation",
+          "value": "null-empty",
+          "version": null
+        },
+        "subject": {
+          "target_type": "DecisionSubject",
+          "target_id": {
+            "namespace": "decision-subject",
+            "value": "placeholder",
+            "version": null
+          },
+          "closure_version": null
+        },
+        "from": {
+          "namespace": "participant",
+          "value": "caller",
+          "version": null
+        },
+        "to": {
+          "namespace": "participant",
+          "value": "service",
+          "version": null
+        },
+        "epoch": {
+          "namespace": "epoch",
+          "value": "current",
+          "version": null
+        },
+        "payload": {
+          "action": "act",
+          "null": null,
+          "array": [],
+          "object": {},
+          "bools": [
+            true,
+            false
+          ]
+        },
+        "timestamp": {
+          "nanos": 0
+        },
+        "encoding": "ordavyn-cbor-v2",
+        "signature_alg": 1,
+        "key_id": "56475aa75463474c",
+        "signature": "8ffb676b836cf389fce5bf36a2e0d40540632e03525b109da916f94dc68a6ed8a528337333be10531b1e471336d9e56919b6f46f265f1ea9ad9da3e2292e7c09"
+      },
+      "signable_hex": "6f72646176796e3a76323a6d65737361676500ad626964a36576616c75656a6e756c6c2d656d7074796776657273696f6ef6696e616d657370616365676d65737361676562746fa36576616c756567736572766963656776657273696f6ef6696e616d6573706163656b7061727469636970616e746466726f6da36576616c75656663616c6c65726776657273696f6ef6696e616d6573706163656b7061727469636970616e74647479706567726571756573746565706f6368a36576616c75656763757272656e746776657273696f6ef6696e616d6573706163656565706f6368666b65795f69647035363437356161373534363334373463677061796c6f6164a5646e756c6cf66561727261798065626f6f6c7382f5f466616374696f6e63616374666f626a656374a0677375626a656374a3697461726765745f6964a36576616c75656b706c616365686f6c6465726776657273696f6ef6696e616d657370616365706465636973696f6e2d7375626a6563746b7461726765745f747970656f4465636973696f6e5375626a6563746f636c6f737572655f76657273696f6ef66776657273696f6e0268656e636f64696e676f6f72646176796e2d63626f722d76326974696d657374616d70a1656e616e6f73006c6f7065726174696f6e5f6964a36576616c75656a6e756c6c2d656d7074796776657273696f6ef6696e616d657370616365716c6f676963616c2d6f7065726174696f6e6d7369676e61747572655f616c6701",
+      "signature_hex": "8ffb676b836cf389fce5bf36a2e0d40540632e03525b109da916f94dc68a6ed8a528337333be10531b1e471336d9e56919b6f46f265f1ea9ad9da3e2292e7c09"
+    },
+    {
+      "name": "integer-boundaries",
+      "message": {
+        "version": 2,
+        "type": "request",
+        "id": {
+          "namespace": "message",
+          "value": "integer-boundaries",
+          "version": null
+        },
+        "operation_id": {
+          "namespace": "logical-operation",
+          "value": "integer-boundaries",
+          "version": null
+        },
+        "subject": {
+          "target_type": "DecisionSubject",
+          "target_id": {
+            "namespace": "decision-subject",
+            "value": "placeholder",
+            "version": null
+          },
+          "closure_version": null
+        },
+        "from": {
+          "namespace": "participant",
+          "value": "caller",
+          "version": null
+        },
+        "to": {
+          "namespace": "participant",
+          "value": "service",
+          "version": null
+        },
+        "epoch": {
+          "namespace": "epoch",
+          "value": "current",
+          "version": null
+        },
+        "payload": {
+          "action": "act",
+          "values": [
+            -9223372036854775808,
+            9223372036854775807,
+            9223372036854775808,
+            18446744073709551615
+          ]
+        },
+        "timestamp": {
+          "nanos": 0
+        },
+        "encoding": "ordavyn-cbor-v2",
+        "signature_alg": 1,
+        "key_id": "56475aa75463474c",
+        "signature": "013250c96c2e78b5d4f2a8d3932a3986c7de33c324d960e3df6a4fc4910dbb0fbc9fd4af416e3d4059d7010d34a0cb8cbb5249115dee1ccbdfb791eb41484508"
+      },
+      "signable_hex": "6f72646176796e3a76323a6d65737361676500ad626964a36576616c756572696e74656765722d626f756e6461726965736776657273696f6ef6696e616d657370616365676d65737361676562746fa36576616c756567736572766963656776657273696f6ef6696e616d6573706163656b7061727469636970616e746466726f6da36576616c75656663616c6c65726776657273696f6ef6696e616d6573706163656b7061727469636970616e74647479706567726571756573746565706f6368a36576616c75656763757272656e746776657273696f6ef6696e616d6573706163656565706f6368666b65795f69647035363437356161373534363334373463677061796c6f6164a266616374696f6e636163746676616c756573843b7fffffffffffffff1b7fffffffffffffff1b80000000000000001bffffffffffffffff677375626a656374a3697461726765745f6964a36576616c75656b706c616365686f6c6465726776657273696f6ef6696e616d657370616365706465636973696f6e2d7375626a6563746b7461726765745f747970656f4465636973696f6e5375626a6563746f636c6f737572655f76657273696f6ef66776657273696f6e0268656e636f64696e676f6f72646176796e2d63626f722d76326974696d657374616d70a1656e616e6f73006c6f7065726174696f6e5f6964a36576616c756572696e74656765722d626f756e6461726965736776657273696f6ef6696e616d657370616365716c6f676963616c2d6f7065726174696f6e6d7369676e61747572655f616c6701",
+      "signature_hex": "013250c96c2e78b5d4f2a8d3932a3986c7de33c324d960e3df6a4fc4910dbb0fbc9fd4af416e3d4059d7010d34a0cb8cbb5249115dee1ccbdfb791eb41484508"
+    },
+    {
+      "name": "float-widths",
+      "message": {
+        "version": 2,
+        "type": "request",
+        "id": {
+          "namespace": "message",
+          "value": "float-widths",
+          "version": null
+        },
+        "operation_id": {
+          "namespace": "logical-operation",
+          "value": "float-widths",
+          "version": null
+        },
+        "subject": {
+          "target_type": "DecisionSubject",
+          "target_id": {
+            "namespace": "decision-subject",
+            "value": "placeholder",
+            "version": null
+          },
+          "closure_version": null
+        },
+        "from": {
+          "namespace": "participant",
+          "value": "caller",
+          "version": null
+        },
+        "to": {
+          "namespace": "participant",
+          "value": "service",
+          "version": null
+        },
+        "epoch": {
+          "namespace": "epoch",
+          "value": "current",
+          "version": null
+        },
+        "payload": {
+          "action": "act",
+          "values": [
+            5e-324,
+            1.1,
+            65504.0,
+            100000.5,
+            1.7976931348623157e+308
+          ]
+        },
+        "timestamp": {
+          "nanos": 0
+        },
+        "encoding": "ordavyn-cbor-v2",
+        "signature_alg": 1,
+        "key_id": "56475aa75463474c",
+        "signature": "1450e9a9fe6a80091f221876f309f860bb2c3c399dbaaf392f94a00e06d208460e764eb0fdd40faf9f3a954bee9d2db86ee1f6c8bf576a15a040f17fceda5b03"
+      },
+      "signable_hex": "6f72646176796e3a76323a6d65737361676500ad626964a36576616c75656c666c6f61742d7769647468736776657273696f6ef6696e616d657370616365676d65737361676562746fa36576616c756567736572766963656776657273696f6ef6696e616d6573706163656b7061727469636970616e746466726f6da36576616c75656663616c6c65726776657273696f6ef6696e616d6573706163656b7061727469636970616e74647479706567726571756573746565706f6368a36576616c75656763757272656e746776657273696f6ef6696e616d6573706163656565706f6368666b65795f69647035363437356161373534363334373463677061796c6f6164a266616374696f6e636163746676616c75657385fb0000000000000001fb3ff199999999999af97bfffa47c35040fb7fefffffffffffff677375626a656374a3697461726765745f6964a36576616c75656b706c616365686f6c6465726776657273696f6ef6696e616d657370616365706465636973696f6e2d7375626a6563746b7461726765745f747970656f4465636973696f6e5375626a6563746f636c6f737572655f76657273696f6ef66776657273696f6e0268656e636f64696e676f6f72646176796e2d63626f722d76326974696d657374616d70a1656e616e6f73006c6f7065726174696f6e5f6964a36576616c75656c666c6f61742d7769647468736776657273696f6ef6696e616d657370616365716c6f676963616c2d6f7065726174696f6e6d7369676e61747572655f616c6701",
+      "signature_hex": "1450e9a9fe6a80091f221876f309f860bb2c3c399dbaaf392f94a00e06d208460e764eb0fdd40faf9f3a954bee9d2db86ee1f6c8bf576a15a040f17fceda5b03"
+    },
+    {
+      "name": "numeric-distinction",
+      "message": {
+        "version": 2,
+        "type": "request",
+        "id": {
+          "namespace": "message",
+          "value": "numeric-distinction",
+          "version": null
+        },
+        "operation_id": {
+          "namespace": "logical-operation",
+          "value": "numeric-distinction",
+          "version": null
+        },
+        "subject": {
+          "target_type": "DecisionSubject",
+          "target_id": {
+            "namespace": "decision-subject",
+            "value": "placeholder",
+            "version": null
+          },
+          "closure_version": null
+        },
+        "from": {
+          "namespace": "participant",
+          "value": "caller",
+          "version": null
+        },
+        "to": {
+          "namespace": "participant",
+          "value": "service",
+          "version": null
+        },
+        "epoch": {
+          "namespace": "epoch",
+          "value": "current",
+          "version": null
+        },
+        "payload": {
+          "action": "act",
+          "values": [
+            0.0,
+            -0.0,
+            1,
+            1.0
+          ]
+        },
+        "timestamp": {
+          "nanos": 0
+        },
+        "encoding": "ordavyn-cbor-v2",
+        "signature_alg": 1,
+        "key_id": "56475aa75463474c",
+        "signature": "c1df41b335768d26f5bae20d97c1279a09173323f35ee35ac82bdf004c02498dc381a1dbfdd11f81533f05fd91eb272a82a1b6e25c3909a4ac7b202040be320b"
+      },
+      "signable_hex": "6f72646176796e3a76323a6d65737361676500ad626964a36576616c7565736e756d657269632d64697374696e6374696f6e6776657273696f6ef6696e616d657370616365676d65737361676562746fa36576616c756567736572766963656776657273696f6ef6696e616d6573706163656b7061727469636970616e746466726f6da36576616c75656663616c6c65726776657273696f6ef6696e616d6573706163656b7061727469636970616e74647479706567726571756573746565706f6368a36576616c75656763757272656e746776657273696f6ef6696e616d6573706163656565706f6368666b65795f69647035363437356161373534363334373463677061796c6f6164a266616374696f6e636163746676616c75657384f90000f9800001f93c00677375626a656374a3697461726765745f6964a36576616c75656b706c616365686f6c6465726776657273696f6ef6696e616d657370616365706465636973696f6e2d7375626a6563746b7461726765745f747970656f4465636973696f6e5375626a6563746f636c6f737572655f76657273696f6ef66776657273696f6e0268656e636f64696e676f6f72646176796e2d63626f722d76326974696d657374616d70a1656e616e6f73006c6f7065726174696f6e5f6964a36576616c7565736e756d657269632d64697374696e6374696f6e6776657273696f6ef6696e616d657370616365716c6f676963616c2d6f7065726174696f6e6d7369676e61747572655f616c6701",
+      "signature_hex": "c1df41b335768d26f5bae20d97c1279a09173323f35ee35ac82bdf004c02498dc381a1dbfdd11f81533f05fd91eb272a82a1b6e25c3909a4ac7b202040be320b"
+    },
+    {
+      "name": "optional-zero",
+      "message": {
+        "version": 2,
+        "type": "request",
+        "id": {
+          "namespace": "message",
+          "value": "optional-zero",
+          "version": 0
+        },
+        "operation_id": {
+          "namespace": "logical-operation",
+          "value": "optional-zero",
+          "version": null
+        },
+        "subject": {
+          "target_type": "DecisionSubject",
+          "target_id": {
+            "namespace": "decision-subject",
+            "value": "placeholder",
+            "version": 0
+          },
+          "closure_version": 0
+        },
+        "from": {
+          "namespace": "participant",
+          "value": "caller",
+          "version": null
+        },
+        "to": {
+          "namespace": "participant",
+          "value": "service",
+          "version": null
+        },
+        "epoch": {
+          "namespace": "epoch",
+          "value": "current",
+          "version": null
+        },
+        "payload": {
+          "action": "act",
+          "value": "zero versions"
+        },
+        "timestamp": {
+          "nanos": 0
+        },
+        "encoding": "ordavyn-cbor-v2",
+        "signature_alg": 1,
+        "key_id": "56475aa75463474c",
+        "signature": "7994dbd426728deec6b62636614ec3b5d2613fab5d5e434f32156e506f089ad4c2bc755033cecf041511867b3867879e724bd09e86ad70c0af8c0cf15b8c6d02"
+      },
+      "signable_hex": "6f72646176796e3a76323a6d65737361676500ad626964a36576616c75656d6f7074696f6e616c2d7a65726f6776657273696f6e00696e616d657370616365676d65737361676562746fa36576616c756567736572766963656776657273696f6ef6696e616d6573706163656b7061727469636970616e746466726f6da36576616c75656663616c6c65726776657273696f6ef6696e616d6573706163656b7061727469636970616e74647479706567726571756573746565706f6368a36576616c75656763757272656e746776657273696f6ef6696e616d6573706163656565706f6368666b65795f69647035363437356161373534363334373463677061796c6f6164a26576616c75656d7a65726f2076657273696f6e7366616374696f6e63616374677375626a656374a3697461726765745f6964a36576616c75656b706c616365686f6c6465726776657273696f6e00696e616d657370616365706465636973696f6e2d7375626a6563746b7461726765745f747970656f4465636973696f6e5375626a6563746f636c6f737572655f76657273696f6e006776657273696f6e0268656e636f64696e676f6f72646176796e2d63626f722d76326974696d657374616d70a1656e616e6f73006c6f7065726174696f6e5f6964a36576616c75656d6f7074696f6e616c2d7a65726f6776657273696f6ef6696e616d657370616365716c6f676963616c2d6f7065726174696f6e6d7369676e61747572655f616c6701",
+      "signature_hex": "7994dbd426728deec6b62636614ec3b5d2613fab5d5e434f32156e506f089ad4c2bc755033cecf041511867b3867879e724bd09e86ad70c0af8c0cf15b8c6d02"
+    }
+  ],
+  "invalid_json": [
+    {
+      "name": "number--0",
+      "json": "{\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"bad\":-0,\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    },
+    {
+      "name": "number-18446744073709551616",
+      "json": "{\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"bad\":18446744073709551616,\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    },
+    {
+      "name": "number--9223372036854775809",
+      "json": "{\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"bad\":-9223372036854775809,\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    },
+    {
+      "name": "number-1e999",
+      "json": "{\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"bad\":1e999,\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    },
+    {
+      "name": "number-NaN",
+      "json": "{\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"bad\":NaN,\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    },
+    {
+      "name": "duplicate-envelope",
+      "json": "{\"version\":2,\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    },
+    {
+      "name": "duplicate-payload",
+      "json": "{\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"bad\":1,\"bad\":2,\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    },
+    {
+      "name": "surrogate",
+      "json": "{\"version\":2,\"type\":\"request\",\"id\":{\"namespace\":\"message\",\"value\":\"unicode-order\",\"version\":null},\"operation_id\":{\"namespace\":\"logical-operation\",\"value\":\"unicode-order\",\"version\":null},\"subject\":{\"target_type\":\"DecisionSubject\",\"target_id\":{\"namespace\":\"decision-subject\",\"value\":\"placeholder\",\"version\":null},\"closure_version\":null},\"from\":{\"namespace\":\"participant\",\"value\":\"caller\",\"version\":null},\"to\":{\"namespace\":\"participant\",\"value\":\"service\",\"version\":null},\"epoch\":{\"namespace\":\"epoch\",\"value\":\"current\",\"version\":null},\"payload\":{\"bad\":\"\\ud800\",\"action\":\"act\",\"z\":\"é\",\"aa\":\"é\",\"я\":\"雪\",\"a\":{\"z\":1,\"aa\":2}},\"timestamp\":{\"nanos\":0},\"encoding\":\"ordavyn-cbor-v2\",\"signature_alg\":1,\"key_id\":\"56475aa75463474c\",\"signature\":\"38cce5e2670577df022596caa27297e36b41610ae6774912a3985d55cecf09f2b9f750549178371cfc8afd3fd317c2e34cd438e4f8d496b401040085c0860c0f\"}"
+    }
+  ]
+}

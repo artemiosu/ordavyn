@@ -71,6 +71,7 @@ pub struct Identifier {
     /// Value — non-empty String or Bytes, type fixed per namespace.
     pub value: String,
     /// Optional version — Integer or String, type fixed per namespace.
+    #[serde(deserialize_with = "crate::wire::required_option")]
     pub version: Option<u64>,
 }
 
@@ -156,6 +157,7 @@ pub struct Reference {
     /// Target Identifier.
     pub target_id: Identifier,
     /// Optional closure version (Integer, monotonic — BC v1.1.0 §10.1).
+    #[serde(deserialize_with = "crate::wire::required_option")]
     pub closure_version: Option<u64>,
 }
 

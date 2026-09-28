@@ -62,7 +62,7 @@ message or operation ID is rejected even when a handler failed after beginning.
 
 ## Implemented boundaries
 
-Requests use `/ordavyn/v1/<action>` and `x-ordavyn-version: 1`. The signed action
+Requests use `/ordavyn/v2/<action>` and `x-ordavyn-version: 2`. The signed action
 must match the exact route, and the key grant must match the sender, this server's
 recipient and the action. The journal reserves IDs atomically before execution;
 it holds at most 10,000 requests by default and fails closed without eviction.
@@ -71,11 +71,15 @@ Handler execution itself is trusted application code and has no time limit.
 Passing a framework app, such as `Ordavyn(app=...)`, is rejected: framework adapters
 are not implemented.
 
-Python signs sorted compact UTF-8 JSON, including signature algorithm, key ID and
-encoding. Rust uses a different CBOR signing format and a different envelope;
-these prototypes are not wire- or signature-interoperable. Responses are separate
-unsigned messages. Clients validate correlation and metadata, but do not provide
-an authenticated remote-response channel.
+Python and Rust share the experimental v2 envelope and domain-separated
+canonical CBOR signatures (`ordavyn-cbor-v2`). Transport remains strict JSON.
+All envelope/AIM fields are mandatory, with explicit nulls for optional values.
+Version 1, old encodings, duplicate or unknown envelope/AIM fields, invalid numeric
+types, out-of-range integers and trees deeper than 32 are rejected.
+The pinned cbor2 5.9.0 Python encoder supplies shortest exact floats; its C
+accelerator is deliberately bypassed because of its 65504.0 boundary encoding.
+Responses remain separate unsigned messages. Clients validate correlation and
+metadata but do not provide an authenticated remote-response channel.
 
 Unsupported: TLS, delegation, negotiation, post-quantum cryptography, streaming
 transport, CBOR transport decoding and CBOR decoder resource-limit enforcement.

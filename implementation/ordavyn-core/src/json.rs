@@ -64,9 +64,13 @@ impl<'de> Deserialize<'de> for Strict {
     }
 }
 pub(crate) fn message(bytes: &[u8]) -> crate::Result<crate::Message> {
+    crate::wire::check_tokens(bytes)?;
     let Strict(value) =
         serde_json::from_slice(bytes).map_err(|_| crate::security::invalid("invalid JSON"))?;
-    serde_json::from_value(value).map_err(|_| crate::security::invalid("invalid message"))
+    let msg =
+        serde_json::from_value(value).map_err(|_| crate::security::invalid("invalid message"))?;
+    crate::wire::validate(&msg, false)?;
+    Ok(msg)
 }
 #[cfg(test)]
 mod tests {

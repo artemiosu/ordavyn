@@ -1,4 +1,4 @@
-"""Role-neutral local exchange between two services; no real operations."""
+"""Role-neutral local wire-v2 exchange between two services; no real operations."""
 from ordavyn import Ordavyn, Identifier, MessageBuilder, MessageType, Ed25519Keypair
 
 

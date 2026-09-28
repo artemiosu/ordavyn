@@ -17,3 +17,5 @@ pub use message::{Message, MessageBuilder, MessageType};
 pub mod security;
 
 mod json;
+
+pub mod wire;

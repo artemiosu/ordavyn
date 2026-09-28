@@ -63,7 +63,7 @@ def test_handler_serialization_errors_keep_reservation(bad_result, http):
         if http: server.stop()
 
 
-def fake_response(request, mutate):
+def fake_response(request, mutate, version=2):
     response = (MessageBuilder(request.to_id, request.from_id).msg_type(MessageType.RESPONSE)
                 .operation_id(request.operation_id).subject(request.subject).epoch(request.epoch)
                 .payload({'ok': True}).build().to_dict())
@@ -76,7 +76,7 @@ def fake_response(request, mutate):
             conn, _ = listener.accept()
             with conn:
                 conn.recv(65536)
-                conn.sendall((f'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 1\r\nContent-Length: {len(body)}\r\n\r\n').encode() + body)
+                conn.sendall((f'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{VERSION_HEADER}: {version}\r\nContent-Length: {len(body)}\r\n\r\n').encode() + body)
     thread = threading.Thread(target=serve); thread.start()
     try:
         return OrdavynClient(port=port).send('/act', request)
@@ -113,7 +113,7 @@ def test_response_write_uses_remaining_deadline(monkeypatch):
     import ordavyn.server as module
     server, _, effects, new = setup()
     body = new().to_json().encode()
-    request = (f'POST /ordavyn/v1/act HTTP/1.1\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 1\r\nContent-Length: {len(body)}\r\n\r\n').encode() + body
+    request = (f'POST /ordavyn/v2/act HTTP/1.1\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 2\r\nContent-Length: {len(body)}\r\n\r\n').encode() + body
     clock = iter([10.0, 10.25, 12.0])
     monkeypatch.setattr(module.time, 'monotonic', lambda: next(clock))
     class Connection:
@@ -147,3 +147,32 @@ def test_restart_rejected_while_handler_active():
         with pytest.raises(RuntimeError): server.start()
     finally:
         release.set();worker.join();server.stop()
+
+
+def test_client_response_version_with_valid_correlated_body():
+    _, _, _, new = setup()
+    request = new()
+    assert fake_response(request, lambda data: None, version=2).payload == {'ok': True}
+    with pytest.raises(ValueError):
+        fake_response(request, lambda data: None, version=1)
+
+
+def test_http_oversized_json_response_is_correlated_and_keeps_effect():
+    server,key,effects,new=setup()
+    server._handlers.clear()
+    @server.expose('/act')
+    def act(value=None):
+        effects.append(value)
+        return {'value':'\n'*40000}
+    request=new();server.start()
+    try:
+        response=server.client(key).send('/act',request)
+        assert response.msg_type==MessageType.ERROR
+        assert 'effect may have occurred' in response.payload['error']
+        assert response.id!=request.id
+        assert response.operation_id==request.operation_id
+        assert response.subject==request.subject and response.epoch==request.epoch
+        assert response.from_id==request.to_id and response.to_id==request.from_id
+        assert server.client(key).send('/act',request).payload['error']=='replay'
+        assert len(effects)==1
+    finally:server.stop()
