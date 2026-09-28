@@ -1,11 +1,12 @@
-"""Role-neutral local wire-v2 exchange between two services; no real operations."""
+"""Role-neutral local wire-v3 exchange between two services; no real operations."""
+
 from ordavyn import Ordavyn, Identifier, MessageBuilder, MessageType, Ed25519Keypair
 
 
 def main():
     left, right = Identifier('participant', 'left'), Identifier('participant', 'right')
     left_key, right_key = Ed25519Keypair.generate(), Ed25519Keypair.generate()
-    first, second = Ordavyn(port=0, participant=left), Ordavyn(port=0, participant=right)
+    first, second = Ordavyn(port=0, participant=left, signer=Ed25519Keypair.generate()), Ordavyn(port=0, participant=right, signer=Ed25519Keypair.generate())
     first.trust(right_key.public_key_bytes(), right, ['status'])
     second.trust(left_key.public_key_bytes(), left, ['status'])
     @first.expose('/status')

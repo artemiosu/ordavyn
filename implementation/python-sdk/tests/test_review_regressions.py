@@ -1,3 +1,7 @@
+
+from ordavyn import Ed25519Keypair, Identifier
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+TEST_SIGNER = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes([99])*32))
 import json
 import socket
 import threading
@@ -55,7 +59,7 @@ def test_handler_serialization_errors_keep_reservation(bad_result, http):
         call = (lambda: server.client(key).send('/act', msg)) if http else (lambda: server._handle_request(msg))
         response = call()
         assert response.msg_type == MessageType.ERROR
-        assert response.payload['error'] in ('handler_or_input_error', 'response too large')
+        assert 'effect may have occurred' in response.payload['error']
         assert json.loads(response.to_json())['type'] == 'error'
         assert call().payload['error'] == 'replay'
         assert len(effects) == 1
@@ -63,10 +67,14 @@ def test_handler_serialization_errors_keep_reservation(bad_result, http):
         if http: server.stop()
 
 
-def fake_response(request, mutate, version=2):
+def fake_response(request, mutate, version=3):
     response = (MessageBuilder(request.to_id, request.from_id).msg_type(MessageType.RESPONSE)
                 .operation_id(request.operation_id).subject(request.subject).epoch(request.epoch)
-                .payload({'ok': True}).build().to_dict())
+                .payload({'ok': True}).build())
+    from ordavyn.wire import request_digest
+    response.reply_to=request.id; response.request_digest=request_digest(request)
+    response.sign(TEST_SIGNER)
+    response=response.to_dict()
     mutate(response)
     body = json.dumps(response).encode()
     listener = socket.socket(); listener.bind(('127.0.0.1', 0)); listener.listen()
@@ -79,7 +87,7 @@ def fake_response(request, mutate, version=2):
                 conn.sendall((f'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{VERSION_HEADER}: {version}\r\nContent-Length: {len(body)}\r\n\r\n').encode() + body)
     thread = threading.Thread(target=serve); thread.start()
     try:
-        return OrdavynClient(port=port).send('/act', request)
+        return OrdavynClient(port=port, response_key=TEST_SIGNER.public_key_bytes(), participant=Identifier('participant', 'service')).send('/act', request)
     finally: thread.join()
 
 
@@ -113,7 +121,7 @@ def test_response_write_uses_remaining_deadline(monkeypatch):
     import ordavyn.server as module
     server, _, effects, new = setup()
     body = new().to_json().encode()
-    request = (f'POST /ordavyn/v2/act HTTP/1.1\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 2\r\nContent-Length: {len(body)}\r\n\r\n').encode() + body
+    request = (f'POST /ordavyn/v3/act HTTP/1.1\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 3\r\nContent-Length: {len(body)}\r\n\r\n').encode() + body
     clock = iter([10.0, 10.25, 12.0])
     monkeypatch.setattr(module.time, 'monotonic', lambda: next(clock))
     class Connection:
@@ -152,7 +160,7 @@ def test_restart_rejected_while_handler_active():
 def test_client_response_version_with_valid_correlated_body():
     _, _, _, new = setup()
     request = new()
-    assert fake_response(request, lambda data: None, version=2).payload == {'ok': True}
+    assert fake_response(request, lambda data: None, version=3).payload == {'ok': True}
     with pytest.raises(ValueError):
         fake_response(request, lambda data: None, version=1)
 

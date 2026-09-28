@@ -1,4 +1,8 @@
 """Frozen cross-language v2 vectors and strict codec rejection matrix."""
+
+from ordavyn import Ed25519Keypair, Identifier
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+TEST_SIGNER = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes([99])*32))
 import copy
 import json
 import os
@@ -10,7 +14,7 @@ from ordavyn.crypto import Ed25519Keypair
 from ordavyn.message import Message
 from ordavyn.wire import strict_json
 
-FIXTURE = Path(os.environ.get('ORDAVYN_WIRE_FIXTURE', Path(__file__).resolve().parents[2] / 'tests/fixtures/wire-v2.json'))
+FIXTURE = Path(os.environ.get('ORDAVYN_WIRE_FIXTURE', Path(__file__).resolve().parents[2] / 'tests/fixtures/wire-v3.json'))
 DATA = json.loads(FIXTURE.read_text())
 KEY = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes.fromhex(DATA['seed_hex'])))
 
@@ -76,7 +80,7 @@ def test_model_budget_independent_of_json_and_exact_boundary():
     msg=Message.from_dict(d);msg.sign(KEY)
     assert msg.verify_signature(KEY.public_key_bytes())
     with pytest.raises(ValueError): msg.to_json()
-    server=Ordavyn(participant=msg.to_id).trust(KEY.public_key_bytes(),msg.from_id,['act'])
+    server=Ordavyn(participant=msg.to_id, signer=TEST_SIGNER).trust(KEY.public_key_bytes(),msg.from_id,['act'])
     effects=[]
     @server.expose('/act')
     def act(value): effects.append(value);return {'ok':True}
@@ -91,7 +95,7 @@ def test_model_budget_independent_of_json_and_exact_boundary():
     with pytest.raises(ValueError): msg.to_dict()
     with pytest.raises(ValueError): msg.sign(KEY)
     assert not msg.verify_signature(KEY.public_key_bytes())
-    assert server._handle_request(msg).msg_type=='error'
+    with pytest.raises(ValueError): server._handle_request(msg)
     assert len(effects)==1
 
 
@@ -108,3 +112,13 @@ def test_sign_budget_failure_preserves_unsigned_original():
     candidate._signable_bytes()  # Metadata fits; adding the signature crosses the budget.
     with pytest.raises(ValueError,match='model exceeds'): msg.sign(KEY)
     assert msg==before
+
+
+def test_fixed_request_digest_and_signed_response_vectors():
+    from ordavyn.wire import request_digest
+    request=Message.from_dict(DATA['binding_request'])
+    assert request_digest(request)==DATA['request_digest']
+    for vector in DATA['vectors'][-2:]:
+        response=Message.from_dict(vector['message'])
+        assert response.reply_to==request.id
+        assert response.request_digest==DATA['request_digest']

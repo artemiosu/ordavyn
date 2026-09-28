@@ -1,4 +1,4 @@
-"""Experimental v2 JSON transport and deterministic CBOR signing codec."""
+"""Experimental v3 JSON transport and deterministic CBOR signing codec."""
 import json
 import math
 import re
@@ -6,8 +6,8 @@ import re
 # Its Python canonical encoder preserves the RFC8949 shortest-float rule.
 from cbor2._encoder import dumps as canonical_cbor
 
-ENCODING = 'ordavyn-cbor-v2'
-DOMAIN = b'ordavyn:v2:message\0'
+ENCODING = 'ordavyn-cbor-v3'
+DOMAIN = b'ordavyn:v3:message\0'
 MAX_BODY = 65536
 
 
@@ -72,18 +72,24 @@ def strict_json(data):
 
 
 def validate_envelope(d, signing=False):
-    fields = {'version', 'type', 'id', 'operation_id', 'subject', 'from', 'to', 'epoch', 'payload', 'timestamp', 'encoding', 'signature_alg', 'key_id', 'signature'}
+    fields = {'version', 'type', 'id', 'operation_id', 'subject', 'from', 'to', 'epoch', 'payload', 'timestamp', 'encoding', 'signature_alg', 'key_id', 'signature', 'reply_to', 'request_digest'}
     if type(d) is not dict or set(d) != fields:
         raise ValueError('invalid envelope fields')
     validate_tree(d)
     if len(canonical_cbor(d, canonical=True)) > MAX_BODY:
         raise ValueError("model exceeds 64KiB")
-    if type(d['version']) is not int or d['version'] != 2 or d['encoding'] != ENCODING or d['type'] not in ('request', 'response', 'event', 'error'):
+    if type(d['version']) is not int or d['version'] != 3 or d['encoding'] != ENCODING or d['type'] not in ('request', 'response', 'event', 'error'):
         raise ValueError('invalid envelope metadata')
     from .aim import Identifier, Reference, Instant
     for name, ns in [('id', 'message'), ('operation_id', 'logical-operation'), ('from', 'participant'), ('to', 'participant'), ('epoch', 'epoch')]:
         if Identifier.from_dict(d[name]).namespace != ns:
             raise ValueError('invalid envelope namespace')
+    if d['type'] in ('request', 'event'):
+        if d['reply_to'] is not None or d['request_digest'] is not None:
+            raise ValueError('request cannot contain response binding')
+    elif (d['reply_to'] is None or Identifier.from_dict(d['reply_to']).namespace != 'message'
+          or type(d['request_digest']) is not str or re.fullmatch('[0-9a-f]{64}', d['request_digest']) is None):
+        raise ValueError('invalid response binding')
     Reference.from_dict(d['subject'])
     Instant.from_dict(d['timestamp'])
     alg, kid, sig = d['signature_alg'], d['key_id'], d['signature']
@@ -102,3 +108,12 @@ def signable_bytes(envelope):
     value = dict(envelope)
     del value['signature']
     return DOMAIN + canonical_cbor(value, canonical=True)
+
+
+def request_digest(message):
+    """Bind a response to the complete final signed request, signature included."""
+    import hashlib
+    envelope = message.to_dict()
+    if envelope['type'] != 'request' or envelope['signature'] is None:
+        raise ValueError('signed request required for binding')
+    return hashlib.sha256(b'ordavyn:v3:request-binding\0' + canonical_cbor(envelope, canonical=True)).hexdigest()

@@ -2,6 +2,10 @@
 
 Run this file directly. ORDAVYN_INTEROP_PEER may point at a prebuilt Rust peer.
 """
+
+from ordavyn import Ed25519Keypair, Identifier
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+TEST_SIGNER = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes([99])*32))
 import copy
 import json
 import os
@@ -19,7 +23,7 @@ from ordavyn.message import Message, MessageType
 from ordavyn.client import OrdavynClient
 
 ROOT=Path(__file__).resolve().parents[1]
-FIXTURE=Path(os.environ.get('ORDAVYN_WIRE_FIXTURE',ROOT/'tests/fixtures/wire-v2.json'))
+FIXTURE=Path(os.environ.get('ORDAVYN_WIRE_FIXTURE',ROOT/'tests/fixtures/wire-v3.json'))
 DATA=json.loads(FIXTURE.read_text())
 KEY=Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes.fromhex(DATA['seed_hex'])))
 PEER=Path(os.environ.get('ORDAVYN_INTEROP_PEER',ROOT/'target/debug/examples/interop_peer'))
@@ -56,6 +60,14 @@ def rust_server(capacity=1000):
         def count():
             proc.stdin.write(b'count\n');proc.stdin.flush()
             return int(readline(proc))
+        def reservations():
+            proc.stdin.write(b'reservations\n');proc.stdin.flush()
+            return int(readline(proc))
+        def states():
+            proc.stdin.write(b'states\n');proc.stdin.flush()
+            return json.loads(readline(proc))
+        count.states=states
+        count.reservations=reservations
         yield port,count
     finally:
         try:
@@ -72,7 +84,7 @@ def rust_server(capacity=1000):
             proc.stdin.close(); proc.stdout.close(); proc.stderr.close()
 
 
-def raw(port,body,path='/ordavyn/v2/act',version='2',content_type='application/json'):
+def raw(port,body,path='/ordavyn/v3/act',version='3',content_type='application/json'):
     if isinstance(body,str):body=body.encode('utf-8')
     deadline=time.monotonic()+4
     with socket.create_connection(('127.0.0.1',port),timeout=4) as sock:
@@ -89,7 +101,12 @@ def raw(port,body,path='/ordavyn/v2/act',version='2',content_type='application/j
             response+=chunk
             if len(response)>65536+8192: raise ValueError('response byte limit')
     assert response, 'server must answer bounded input'
-    return int(response.split(b' ',2)[1])
+    status = int(response.split(b' ',2)[1])
+    if status == 200:
+        message = Message.from_dict(json.loads(response.split(b'\r\n\r\n',1)[1]))
+        assert message.verify_signature(TEST_SIGNER.public_key_bytes())
+        return 200 if message.msg_type == MessageType.RESPONSE else 403
+    return status
 
 
 def exercise(port,count,origin,tmp):
@@ -103,7 +120,7 @@ def exercise(port,count,origin,tmp):
             return Message.from_dict(json.loads(call('sign',f)))
         msg.sign(KEY);return msg
     msg=fresh()
-    if origin=='python': result=OrdavynClient(port=port).send('/act',msg,sign=False)
+    if origin=='python': result=OrdavynClient(port=port, response_key=TEST_SIGNER.public_key_bytes(), participant=Identifier('participant', 'service')).send('/act',msg,sign=False)
     else:
         f=tmp/'send.json';f.write_text(msg.to_json());result=Message.from_dict(json.loads(call('client',port,f)))
     assert result.msg_type==MessageType.RESPONSE and result.operation_id==msg.operation_id
@@ -135,7 +152,7 @@ def exercise(port,count,origin,tmp):
             d['payload']['value']=v
         if field in {'version','encoding','unknown','alias','aim-missing','aim-unknown','wrong-type','integer','utf8','depth'}:
             raw_sign(d)
-        cases.append((field,json.dumps(d),{'path':'/ordavyn/v2/denied'} if field=='permission' else {}))
+        cases.append((field,json.dumps(d),{'path':'/ordavyn/v3/denied'} if field=='permission' else {}))
     over_model=fresh().to_dict();over_model['payload']['value']=[0.1]*8000;raw_sign(over_model)
     cases.append(('model-budget',json.dumps(over_model,separators=(',',':')),{}))
     for case in DATA['invalid_json']:cases.append((case['name'],case['json'],{}))
@@ -152,7 +169,7 @@ def exercise(port,count,origin,tmp):
     for refusal in ('wrong-key','no-permission','route-mismatch'):
         retry=fresh('denied' if refusal=='no-permission' else 'act')
         if refusal=='wrong-key': retry.sign(Ed25519Keypair.generate())
-        path='/ordavyn/v2/denied' if refusal in ('no-permission','route-mismatch') else '/ordavyn/v2/act'
+        path='/ordavyn/v3/denied' if refusal in ('no-permission','route-mismatch') else '/ordavyn/v3/act'
         assert raw(port,retry.to_json(),path=path)!=200 and count()==effects
         retry.payload['action']='act';retry.sign(KEY)
         assert raw(port,retry.to_json())==200
@@ -170,7 +187,7 @@ def exercise(port,count,origin,tmp):
             item=Message.from_dict(json.loads(call('sign',f)))
             f.write_text(item.to_json());result=Message.from_dict(json.loads(call('client',port,f)))
         else:
-            result=OrdavynClient(port=port).send('/act',item,sign=False)
+            result=OrdavynClient(port=port, response_key=TEST_SIGNER.public_key_bytes(), participant=Identifier('participant', 'service')).send('/act',item,sign=False)
         effects+=1
         assert canonical_cbor(result.payload['echo'],canonical=True)==canonical_cbor(item.payload['value'],canonical=True)
         assert result.subject==item.subject and count()==effects
@@ -197,7 +214,7 @@ def raw_sign(data):
     # Independent test signer deliberately bypasses production shape validation.
     data['signature_alg']=1;data['key_id']=KEY.key_id()
     value={key:value for key,value in data.items() if key!='signature'}
-    data['signature']=KEY.sign(b'ordavyn:v2:message\0'+canonical_cbor(value,canonical=True)).hex()
+    data['signature']=KEY.sign(b'ordavyn:v3:message\0'+canonical_cbor(value,canonical=True)).hex()
 
 
 def capacity_exercise(port,count,origin,tmp):
@@ -213,7 +230,7 @@ def capacity_exercise(port,count,origin,tmp):
 
 def python_server(capacity=1000):
     effects=[]
-    server=Ordavyn(port=0,participant=Identifier('participant','service'),replay_capacity=capacity).trust(KEY.public_key_bytes(),Identifier('participant','caller'),['act'])
+    server=Ordavyn(port=0,participant=Identifier('participant','service'),replay_capacity=capacity, signer=TEST_SIGNER).trust(KEY.public_key_bytes(),Identifier('participant','caller'),['act'])
     @server.expose('/denied')
     @server.expose('/act')
     def act(value, padding=None):

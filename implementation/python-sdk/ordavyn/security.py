@@ -125,8 +125,8 @@ class SecurityPolicy:
     def authorize_and_reserve(self, msg, action, reservation):
         from .wire import validate_envelope
         validate_envelope(msg.to_dict())
-        if (type(msg.version) is not int or msg.version != 2 or msg.msg_type != MessageType.REQUEST
-                or msg.encoding != 'ordavyn-cbor-v2' or msg.to_id != self.recipient
+        if (type(msg.version) is not int or msg.version != 3 or msg.msg_type != MessageType.REQUEST
+                or msg.encoding != 'ordavyn-cbor-v3' or msg.to_id != self.recipient
                 or msg.from_id.namespace != 'participant'
                 or msg.id.namespace != 'message' or msg.operation_id.namespace != 'logical-operation'
                 or msg.epoch.namespace != 'epoch'

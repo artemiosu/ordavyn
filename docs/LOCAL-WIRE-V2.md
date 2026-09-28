@@ -1,5 +1,8 @@
 # Experimental local wire v2
 
+Historical local profile, retained for reference. The current implementation uses
+[incompatible wire v3](LOCAL-WIRE-V3.md); the statements below describe v2.
+
 This is a local, role-neutral protocol experiment, not a final standard or release
 approval. Both Rust and Python use this contract. It is incompatible with v1;
 there is no version negotiation or fallback. Apache-2.0 applies to the implementation.

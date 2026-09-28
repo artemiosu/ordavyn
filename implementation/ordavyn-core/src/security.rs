@@ -234,7 +234,7 @@ impl SecurityPolicy {
     }
     pub fn authorize_and_reserve(&self, msg: &Message, action: &str) -> Result<Admission<'_>> {
         crate::wire::validate(msg, false)?;
-        if msg.version != 2
+        if msg.version != 3
             || msg.msg_type != MessageType::Request
             || msg.encoding != crate::wire::ENCODING
             || msg.to != self.recipient

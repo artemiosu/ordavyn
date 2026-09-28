@@ -12,3 +12,11 @@ cases. The original generator shares the Python implementation, so its output is
 not an independent specification oracle. Cross-language agreement and fixed
 regressions are not independent certification, a security audit, or proof of
 correctness for all possible messages. The keys are public test material only.
+
+## Wire v3
+
+`wire-v3.json` retains numeric request cases and adds signed success/error responses
+and a full-request binding digest. It was generated with the v3 Python codec; both
+SDKs verify and independently reproduce the literal bytes/signatures. Malformed
+v2 JSON examples were moved to v3 metadata to preserve their rejection coverage.
+The historical v2 fixture is unchanged. All keys here are public test material.

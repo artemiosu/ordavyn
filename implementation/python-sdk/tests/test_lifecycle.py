@@ -1,4 +1,8 @@
 """Local admission ordering; synchronization never relies on random sleeps."""
+
+from ordavyn import Ed25519Keypair, Identifier
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+TEST_SIGNER = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes([99])*32))
 import socket
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -15,7 +19,7 @@ def setup(request, tmp_path):
     path = tmp_path / 'lifecycle.sqlite'
     journal = (MemoryJournal(RECIPIENT, 100) if request.param == 'memory' else
                SQLiteJournal.create(path, RECIPIENT, 100))
-    server = Ordavyn(port=0, participant=RECIPIENT, replay_capacity=100, journal=journal)
+    server = Ordavyn(port=0, participant=RECIPIENT, replay_capacity=100, journal=journal, signer=TEST_SIGNER)
     key = Ed25519Keypair.generate()
     server.trust(key.public_key_bytes(), SENDER, ['act', 'other'])
     yield server, key, journal, path
@@ -145,7 +149,7 @@ def test_sqlite_rotation_reopen(setup):
         journal.close()
         opened = SQLiteJournal.open(path, RECIPIENT, 100)
         try:
-            fresh = Ordavyn(participant=RECIPIENT, replay_capacity=100, journal=opened)
+            fresh = Ordavyn(participant=RECIPIENT, replay_capacity=100, journal=opened, signer=TEST_SIGNER)
             fresh.expose('/act')(lambda: {})
             fresh.trust(new.public_key_bytes(), SENDER, ['act'])
             assert not accepted(fresh, retry)

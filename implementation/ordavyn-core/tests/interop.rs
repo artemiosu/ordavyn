@@ -1,7 +1,7 @@
 use ordavyn_core::{wire, Ed25519Keypair, Message};
 use serde_json::{json, Value};
 fn fixture() -> Value {
-    serde_json::from_str(include_str!("../../tests/fixtures/wire-v2.json")).unwrap()
+    serde_json::from_str(include_str!("../../tests/fixtures/wire-v3.json")).unwrap()
 }
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -108,15 +108,18 @@ fn model_budget_independent_of_json_and_exact_boundary() {
     msg.sign(&key).unwrap();
     msg.verify_signature(&key.public_key()).unwrap();
     assert!(wire::to_json(&msg).is_err());
-    let server = OrdavynServer::new();
+    let server =
+        OrdavynServer::new().with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
     server
         .trust(key.public_key(), msg.from.clone(), &["act"])
         .unwrap();
-    server.handle("/ordavyn/v2/act", |mut m| {
+    server.handle("/ordavyn/v3/act", |mut m| {
         m.payload = json!({"ok":true});
         m
     });
-    assert!(server.dispatch("/ordavyn/v2/act", &msg).is_ok());
+    assert!(server
+        .dispatch("/ordavyn/v3/act", &msg)
+        .is_ok_and(|m| m.msg_type == ordavyn_core::MessageType::Response));
     msg.payload = json!({"action":"act", "value":"x".repeat(64000)});
     // ciborium's serde encoding has the same size regardless of map ordering.
     let mut model = Vec::new();
@@ -131,7 +134,9 @@ fn model_budget_independent_of_json_and_exact_boundary() {
     assert!(wire::validate(&msg, false).is_err());
     assert!(msg.sign(&key).is_err());
     assert!(msg.verify_signature(&key.public_key()).is_err());
-    assert!(server.dispatch("/ordavyn/v2/act", &msg).is_err());
+    assert!(server
+        .dispatch("/ordavyn/v3/act", &msg)
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
 }
 
 #[test]
@@ -153,4 +158,27 @@ fn sign_budget_failure_preserves_unsigned_original() {
     candidate.canonical_signable_bytes().unwrap();
     assert!(msg.sign(&key).is_err());
     assert_eq!(serde_json::to_value(&msg).unwrap(), original);
+}
+
+#[test]
+fn fixed_request_binding_and_signed_responses() {
+    let data = fixture();
+    let request: Message = serde_json::from_value(data["binding_request"].clone()).unwrap();
+    assert_eq!(
+        wire::request_digest(&request).unwrap(),
+        data["request_digest"].as_str().unwrap()
+    );
+    for vector in data["vectors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|v| v["name"].as_str().unwrap().starts_with("signed-"))
+    {
+        let response: Message = serde_json::from_value(vector["message"].clone()).unwrap();
+        assert_eq!(response.reply_to.as_ref(), Some(&request.id));
+        assert_eq!(
+            response.request_digest.as_deref(),
+            data["request_digest"].as_str()
+        );
+    }
 }

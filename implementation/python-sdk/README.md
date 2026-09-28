@@ -35,7 +35,7 @@ from ordavyn import Ordavyn, Ed25519Keypair, Identifier, MessageBuilder, Message
 caller = Identifier('participant', 'caller')
 service = Identifier('participant', 'service')
 key = Ed25519Keypair.generate()
-server = Ordavyn(port=0, participant=service)
+server = Ordavyn(port=0, participant=service, signer=Ed25519Keypair.generate())
 server.trust(key.public_key_bytes(), caller, ['status'])
 
 @server.expose('/status')
@@ -62,7 +62,7 @@ message or operation ID is rejected even when a handler failed after beginning.
 
 ## Implemented boundaries
 
-Requests use `/ordavyn/v2/<action>` and `x-ordavyn-version: 2`. The signed action
+Requests use `/ordavyn/v3/<action>` and `x-ordavyn-version: 3`. The signed action
 must match the exact route, and the key grant must match the sender, this server's
 recipient and the action. The journal reserves IDs atomically before execution;
 it holds at most 10,000 requests by default and fails closed without eviction.
@@ -71,17 +71,17 @@ Handler execution itself is trusted application code and has no time limit.
 Passing a framework app, such as `Ordavyn(app=...)`, is rejected: framework adapters
 are not implemented.
 
-Python and Rust share the experimental v2 envelope and domain-separated
-canonical CBOR signatures (`ordavyn-cbor-v2`). Transport remains strict JSON.
+Python and Rust share the experimental v3 envelope and domain-separated
+canonical CBOR signatures (`ordavyn-cbor-v3`). Transport remains strict JSON.
 All envelope/AIM fields are mandatory, with explicit nulls for optional values.
-Version 1, old encodings, duplicate or unknown envelope/AIM fields, invalid numeric
+Versions 1/2, old encodings, duplicate or unknown envelope/AIM fields, invalid numeric
 types, out-of-range integers and trees deeper than 32 are rejected.
 The pinned cbor2 5.9.0 Python encoder supplies shortest exact floats; its C
 accelerator is deliberately bypassed because of its 65504.0 boundary encoding.
-Responses remain separate unsigned messages. Clients validate correlation and
-metadata but do not provide an authenticated remote-response channel.
+Responses and errors are signed and bound to the full signed request. A local
+response public-key/participant pin is required before network I/O.
 
-Unsupported: TLS, delegation, negotiation, post-quantum cryptography, streaming
+Unsupported: delegation, negotiation, post-quantum cryptography, streaming
 transport, CBOR transport decoding and CBOR decoder resource-limit enforcement.
 Rust's CBOR nesting/collection constants are proposed values, not enforced limits.
 Default memory replay protection disappears on restart. Explicit SQLite storage
@@ -102,10 +102,13 @@ restart rules.
 Provision once with `SQLiteJournal.create(path, recipient, capacity)`. After a
 restart use `SQLiteJournal.open(path, recipient, capacity)`; opening a missing,
 corrupt or mismatched journal fails. Pass the object to
-`Ordavyn(participant=recipient, replay_capacity=capacity, journal=journal)`.
+`Ordavyn(participant=recipient, replay_capacity=capacity, journal=journal, signer=signer)`.
 `MemoryJournal` is the explicitly temporary alternative. `journal.inspect()`
 provides local records; `outcome_unknown` requires application reconciliation and
 `handler_returned` only records a valid normal local return. Both block replay.
 Storage failure never falls back to memory. `stop()` does not close the journal;
 `journal.close()` rejects active handlers. See the
 [shared journal guide](../../docs/LOCAL-JOURNAL.md) for a restart example and limits.
+
+See the [authenticated v3 exchange guide](../../docs/LOCAL-WIRE-V3.md) for explicit TLS 1.3 configuration,
+protocol pins, HTTP test mode without confidentiality and the threat model.

@@ -1,6 +1,6 @@
 """Local Ordavyn message envelope with Ed25519-authenticated metadata.
 
-Python signs domain-separated deterministic CBOR v2; transport is JSON.
+Python signs domain-separated deterministic CBOR v3; transport is JSON.
 """
 
 import time
@@ -24,8 +24,8 @@ class MessageType:
 
 @dataclass
 class Message:
-    """Local envelope; only Ed25519 and the fixed CBOR v2 signing format are supported."""
-    version: int = 2
+    """Local envelope; only Ed25519 and the fixed CBOR v3 signing format are supported."""
+    version: int = 3
     msg_type: str = MessageType.REQUEST
     id: Identifier = field(default_factory=lambda: Identifier("message", "placeholder"))
     operation_id: Identifier = field(default_factory=lambda: Identifier("logical-operation", "placeholder"))
@@ -39,6 +39,9 @@ class Message:
     signature: Optional[str] = None  # hex-encoded
     timestamp: Instant = field(default_factory=lambda: Instant(nanos=0))
     encoding: str = ENCODING
+
+    reply_to: Optional[Identifier] = None
+    request_digest: Optional[str] = None
 
     def is_signed(self) -> bool:
         return self.signature is not None
@@ -80,6 +83,8 @@ class Message:
         """Serialize message to dict for JSON transport."""
         d = {
             "version": self.version,
+            "reply_to": self.reply_to.to_dict() if self.reply_to is not None else None,
+            "request_digest": self.request_digest,
             "type": self.msg_type,
             "id": self.id.to_dict(),
             "operation_id": self.operation_id.to_dict(),
@@ -105,6 +110,8 @@ class Message:
         validate_envelope(d)
         msg = cls(
             version=d["version"],
+            reply_to=Identifier.from_dict(d["reply_to"]) if d["reply_to"] is not None else None,
+            request_digest=d["request_digest"],
             msg_type=d["type"],
             id=Identifier.from_dict(d["id"]),
             operation_id=Identifier.from_dict(d["operation_id"]),

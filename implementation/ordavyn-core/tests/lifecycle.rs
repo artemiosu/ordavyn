@@ -39,7 +39,7 @@ impl Drop for ReleaseOnDrop {
         self.0.release();
     }
 }
-const ROUTE: &str = "/ordavyn/v2/act";
+const ROUTE: &str = "/ordavyn/v3/act";
 fn sender() -> Identifier {
     Identifier::new("participant", "caller")
 }
@@ -70,7 +70,9 @@ fn setup(
     } else {
         Journal::memory(recipient(), 100).unwrap()
     });
-    let server = OrdavynServer::with_journal(recipient(), 100, journal.clone()).unwrap();
+    let server = OrdavynServer::with_journal(recipient(), 100, journal.clone())
+        .unwrap()
+        .with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
     let key = Ed25519Keypair::generate();
     server
         .trust(key.public_key(), sender(), &["act", "other"])
@@ -118,7 +120,10 @@ async fn admission_precedes_management_and_clones_share_gate() {
                 }
             }
             assert!(journal.close().is_err());
-            assert!(server.clone().dispatch(ROUTE, &message(&key)).is_err());
+            assert!(server
+                .clone()
+                .dispatch(ROUTE, &message(&key))
+                .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
             release.wait();
             assert_eq!(
                 worker.join().unwrap().unwrap().msg_type,
@@ -133,7 +138,9 @@ async fn admission_precedes_management_and_clones_share_gate() {
             if operation == "rotate" {
                 retry.sign(&new).unwrap();
             }
-            assert!(server.dispatch(ROUTE, &retry).is_err());
+            assert!(server
+                .dispatch(ROUTE, &retry)
+                .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
             cleanup(journal, path);
         }
     }
@@ -172,7 +179,10 @@ fn management_precedes_admission_without_reservation() {
                 _ => server.request_stop(),
             }
             release.wait();
-            assert!(worker.join().unwrap().is_err());
+            assert!(worker
+                .join()
+                .unwrap()
+                .is_ok_and(|r| r.msg_type == MessageType::Error));
             assert!(journal.inspect().unwrap().is_empty());
             cleanup(journal, path);
         }
@@ -183,7 +193,7 @@ async fn trust_updates_rotation_conflicts_and_reopen() {
     for sqlite in [false, true] {
         let (server, key, journal, path) = setup(sqlite);
         server.handle(ROUTE, |m| m);
-        server.handle("/ordavyn/v2/other", |m| m);
+        server.handle("/ordavyn/v3/other", |m| m);
         assert!(server
             .trust(
                 key.public_key(),
@@ -195,11 +205,15 @@ async fn trust_updates_rotation_conflicts_and_reopen() {
         server
             .trust(key.public_key(), sender(), &["other"])
             .unwrap();
-        assert!(server.dispatch(ROUTE, &message(&key)).is_err());
+        assert!(server
+            .dispatch(ROUTE, &message(&key))
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         let mut other = message(&key);
         other.payload = serde_json::json!({"action":"other"});
         other.sign(&key).unwrap();
-        assert!(server.dispatch("/ordavyn/v2/other", &other).is_ok());
+        assert!(server
+            .dispatch("/ordavyn/v3/other", &other)
+            .is_ok_and(|m| m.msg_type == ordavyn_core::MessageType::Response));
         server.trust(key.public_key(), sender(), &["act"]).unwrap();
         let new = Ed25519Keypair::generate();
         server.trust(new.public_key(), sender(), &["act"]).unwrap();
@@ -215,33 +229,49 @@ async fn trust_updates_rotation_conflicts_and_reopen() {
         assert!(server.revoke(&new.public_key()).unwrap());
         assert!(!server.revoke(&new.public_key()).unwrap());
         let msg = message(&key);
-        assert!(server.dispatch(ROUTE, &msg).is_ok());
+        assert!(server
+            .dispatch(ROUTE, &msg)
+            .is_ok_and(|m| m.msg_type == ordavyn_core::MessageType::Response));
         server
             .rotate_key(&key.public_key(), new.public_key())
             .unwrap();
-        assert!(server.dispatch(ROUTE, &message(&key)).is_err());
+        assert!(server
+            .dispatch(ROUTE, &message(&key))
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         let fresh = server.dispatch(ROUTE, &message(&new)).unwrap();
         assert_eq!(fresh.msg_type, MessageType::Response);
         assert_eq!(fresh.payload, serde_json::json!({"action":"act"}));
         let mut forbidden = message(&new);
         forbidden.payload = serde_json::json!({"action":"other"});
         forbidden.sign(&new).unwrap();
-        assert!(server.dispatch("/ordavyn/v2/other", &forbidden).is_err());
+        assert!(server
+            .dispatch("/ordavyn/v3/other", &forbidden)
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         let mut retry = message(&new);
         retry.operation_id = msg.operation_id;
         retry.sign(&new).unwrap();
-        assert!(server.dispatch(ROUTE, &retry).is_err());
+        assert!(server
+            .dispatch(ROUTE, &retry)
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         assert!(server.stop(Duration::ZERO).await);
         server.resume().unwrap();
-        assert!(server.dispatch(ROUTE, &retry).is_err());
+        assert!(server
+            .dispatch(ROUTE, &retry)
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         if sqlite {
             journal.close().unwrap();
             let reopened = Arc::new(Journal::open(&path, recipient(), 100).unwrap());
-            let fresh = OrdavynServer::with_journal(recipient(), 100, reopened.clone()).unwrap();
+            let fresh = OrdavynServer::with_journal(recipient(), 100, reopened.clone())
+                .unwrap()
+                .with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
             fresh.handle(ROUTE, |m| m);
             fresh.trust(new.public_key(), sender(), &["act"]).unwrap();
-            assert!(fresh.dispatch(ROUTE, &retry).is_err());
-            assert!(fresh.dispatch(ROUTE, &message(&new)).is_ok());
+            assert!(fresh
+                .dispatch(ROUTE, &retry)
+                .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
+            assert!(fresh
+                .dispatch(ROUTE, &message(&new))
+                .is_ok_and(|m| m.msg_type == ordavyn_core::MessageType::Response));
             reopened.close().unwrap();
         }
         cleanup(journal, path);
@@ -259,7 +289,9 @@ async fn panic_and_completion_failure_release_activity() {
         );
         assert!(server.stop(Duration::ZERO).await);
         server.resume().unwrap();
-        assert!(server.dispatch(ROUTE, &msg).is_err());
+        assert!(server
+            .dispatch(ROUTE, &msg)
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         cleanup(journal, path);
     }
     let (server, key, journal, path) = setup(true);
@@ -269,10 +301,14 @@ async fn panic_and_completion_failure_release_activity() {
         db.execute_batch("CREATE TRIGGER fail_completion BEFORE UPDATE ON operations BEGIN SELECT RAISE(FAIL, 'failure'); END;").unwrap(); m
     });
     let msg = message(&key);
-    assert!(server.dispatch(ROUTE, &msg).is_err());
+    assert!(server
+        .dispatch(ROUTE, &msg)
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     assert!(server.stop(Duration::ZERO).await);
     server.resume().unwrap();
-    assert!(server.dispatch(ROUTE, &msg).is_err());
+    assert!(server
+        .dispatch(ROUTE, &msg)
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     cleanup(journal, path);
 }
 #[tokio::test(flavor = "current_thread")]
@@ -298,6 +334,10 @@ async fn http_worker_does_not_block_runtime_and_survives_serve_cancellation() {
             let request = msg.clone();
             let client = tokio::spawn(async move {
                 OrdavynClient::new(&format!("http://{addr}"))
+                    .with_response_key(
+                        ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+                        ordavyn_core::Identifier::new("participant", "service"),
+                    )
                     .send("/act", &request)
                     .await
             });
@@ -312,21 +352,26 @@ async fn http_worker_does_not_block_runtime_and_survives_serve_cancellation() {
             assert!(!server.stop(Duration::ZERO).await);
             assert!(server.resume().is_err());
             assert!(server.serve_one("127.0.0.1:0").await.is_err());
-            assert!(server.dispatch(ROUTE, &message(&key)).is_err());
+            assert!(server
+                .dispatch(ROUTE, &message(&key))
+                .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
             assert!(journal.close().is_err());
             release.wait();
             let _ = serving.await;
             let _ = client.await;
             assert!(server.stop(Duration::from_secs(3)).await);
             server.resume().unwrap();
-            assert!(server.dispatch(ROUTE, &msg).is_err());
+            assert!(server
+                .dispatch(ROUTE, &msg)
+                .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
             cleanup(journal, path);
         }
     }
 }
 #[tokio::test(flavor = "current_thread")]
 async fn stop_before_start_bind_failure_and_all_listener_entries() {
-    let server = OrdavynServer::new();
+    let server =
+        OrdavynServer::new().with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
     assert!(server.stop(Duration::ZERO).await);
     let occupied = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     assert!(server
@@ -366,8 +411,12 @@ fn handler_can_request_stop() {
         clone.request_stop();
         m
     });
-    assert!(server.dispatch(ROUTE, &message(&key)).is_ok());
-    assert!(server.dispatch(ROUTE, &message(&key)).is_err());
+    assert!(server
+        .dispatch(ROUTE, &message(&key))
+        .is_ok_and(|m| m.msg_type == ordavyn_core::MessageType::Response));
+    assert!(server
+        .dispatch(ROUTE, &message(&key))
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     server.resume().unwrap();
     cleanup(journal, path);
 }
@@ -415,6 +464,10 @@ async fn http_revoke_and_rotate_both_orderings() {
                 let request = msg.clone();
                 let client = tokio::spawn(async move {
                     OrdavynClient::new(&format!("http://{addr}"))
+                        .with_response_key(
+                            ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+                            ordavyn_core::Identifier::new("participant", "service"),
+                        )
                         .send("/act", &request)
                         .await
                 });
@@ -430,7 +483,10 @@ async fn http_revoke_and_rotate_both_orderings() {
                         MessageType::Response
                     );
                 } else {
-                    assert!(client.await.unwrap().is_err());
+                    assert!(client
+                        .await
+                        .unwrap()
+                        .is_ok_and(|r| r.msg_type == MessageType::Error));
                     assert!(journal.inspect().unwrap().is_empty());
                 }
                 serving.await.unwrap().unwrap();
@@ -443,7 +499,9 @@ async fn http_revoke_and_rotate_both_orderings() {
                     } else {
                         server.trust(key.public_key(), sender(), &["act"]).unwrap();
                     }
-                    assert!(server.dispatch(ROUTE, &retry).is_err());
+                    assert!(server
+                        .dispatch(ROUTE, &retry)
+                        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
                 }
                 cleanup(journal, path);
             }

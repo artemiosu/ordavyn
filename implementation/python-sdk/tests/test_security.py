@@ -1,3 +1,7 @@
+
+from ordavyn import Ed25519Keypair, Identifier
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+TEST_SIGNER = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes([99])*32))
 import copy
 import concurrent.futures
 import socket
@@ -10,7 +14,7 @@ from ordavyn.client import PATH_PREFIX, VERSION_HEADER
 def setup(capacity=10000, failing=False):
     key = Ed25519Keypair.generate()
     sender, recipient = Identifier('participant', 'caller'), Identifier('participant', 'service')
-    server = Ordavyn(port=0, participant=recipient, replay_capacity=capacity)
+    server = Ordavyn(port=0, participant=recipient, replay_capacity=capacity, signer=TEST_SIGNER)
     server.trust(key.public_key_bytes(), sender, ['act'])
     effects = []
     @server.expose('/act', consequential=True)
@@ -33,7 +37,7 @@ def test_authorized_direct_and_request_unchanged():
     response = server._handle_request(msg)
     assert response.msg_type == MessageType.RESPONSE and effects == ['тест']
     assert msg.to_dict() == before and msg.verify_signature(key.public_key_bytes())
-    assert response.id != msg.id and not response.is_signed()
+    assert response.id != msg.id and response.is_signed()
 
 
 @pytest.mark.parametrize('mutation', ['unsigned','forged','payload','key','algorithm','encoding','version','type','sender','recipient','action','id','operation','epoch'])
@@ -47,14 +51,17 @@ def test_rejected_before_effect(mutation):
     elif mutation == 'algorithm': msg.signature_alg = 2
     elif mutation == 'encoding': msg.encoding = 'cbor'
     elif mutation == 'version': msg.version = 1
-    elif mutation == 'type': msg.msg_type = 'response'; msg.sign(key)
+    elif mutation == 'type': msg.msg_type = 'event'; msg.sign(key)
     elif mutation == 'sender': msg.from_id = Identifier('participant','stranger'); msg.sign(key)
     elif mutation == 'recipient': msg.to_id = Identifier('participant','other'); msg.sign(key)
     elif mutation == 'action': msg.payload['action'] = 'other'; msg.sign(key)
     elif mutation == 'id': msg.id = Identifier('wrong','id')
     elif mutation == 'operation': msg.operation_id = Identifier('wrong','op')
     elif mutation == 'epoch': msg.epoch = Identifier('wrong','epoch')
-    assert server._handle_request(msg).msg_type == MessageType.ERROR
+    try:
+        assert server._handle_request(msg).msg_type == MessageType.ERROR
+    except ValueError:
+        pass  # Invalid envelopes need not produce a protocol envelope.
     assert effects == []
 
 
@@ -96,7 +103,7 @@ def test_object_array_signature_distinct():
     assert not msg.verify_signature(key.public_key_bytes())
 
 
-def raw(server, msg, path='/ordavyn/v2/act', version='2', extra='', fragments=False):
+def raw(server, msg, path='/ordavyn/v3/act', version='3', extra='', fragments=False):
     body = msg.to_json().encode()
     request = (f'POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n{VERSION_HEADER}: {version}\r\nContent-Length: {len(body)}\r\n{extra}\r\n').encode()+body
     with socket.create_connection((server.host,server.port),timeout=4) as sock:
@@ -118,12 +125,12 @@ def test_http_matrix_and_fragmented_unicode():
     try:
         first = new()
         assert b'200 Result' in raw(server,first,fragments=True)
-        assert b'403 Result' in raw(server,first)
-        assert b'403 Result' in raw(server,new(),path='/ordavyn/v2/wrong')
+        assert b'200 Result' in raw(server,first)
+        assert b'200 Result' in raw(server,new(),path='/ordavyn/v3/wrong')
         assert b'400 Result' in raw(server,new(),version='1')
         assert b'400 Result' in raw(server,new(),extra='Transfer-Encoding: chunked\r\n')
         bad = new(); bad.signature='ff'*64
-        assert b'403 Result' in raw(server,bad)
+        assert b'200 Result' in raw(server,bad)
         assert len(effects)==1
         response = server.client(key).send('/act',new())
         assert response.payload == {'ok':'тест'} and len(effects)==2
@@ -131,13 +138,12 @@ def test_http_matrix_and_fragmented_unicode():
 
 
 def test_input_limits_and_fake_app():
-    with pytest.raises(ValueError): Ordavyn(app=object())
+    with pytest.raises(ValueError): Ordavyn(app=object(), signer=TEST_SIGNER)
     server, key, effects, new = setup()
     msg=new(); msg.payload['value']='a'*65536
     with pytest.raises(ValueError): msg.sign(key)
     assert not msg.verify_signature(key.public_key_bytes())
-    result = server._handle_request(msg)
-    assert result.msg_type == MessageType.ERROR
+    with pytest.raises(ValueError): server._handle_request(msg)
     assert effects == []
     assert server._handle_request(new()).msg_type == MessageType.RESPONSE
     assert len(effects) == 1
@@ -155,9 +161,9 @@ def test_http_header_body_limits_and_timeout(monkeypatch):
     server.start()
     try:
         for request in (
-            b'POST /ordavyn/v2/act HTTP/1.1\r\nX-Padding: '+b'a'*9000+b'\r\n\r\n',
-            b'POST /ordavyn/v2/act HTTP/1.1\r\nContent-Type: application/json\r\nx-ordavyn-version: 2\r\nContent-Length: 65537\r\n\r\n',
-            b'POST /ordavyn/v2/act HTTP/1.1\r\n',
+            b'POST /ordavyn/v3/act HTTP/1.1\r\nX-Padding: '+b'a'*9000+b'\r\n\r\n',
+            b'POST /ordavyn/v3/act HTTP/1.1\r\nContent-Type: application/json\r\nx-ordavyn-version: 3\r\nContent-Length: 65537\r\n\r\n',
+            b'POST /ordavyn/v3/act HTTP/1.1\r\n',
         ):
             with socket.create_connection((server.host,server.port),timeout=1) as conn:
                 conn.sendall(request)
@@ -177,7 +183,7 @@ def test_client_rejects_version_limits_and_slow_response(monkeypatch):
     _, _, _, new = setup()
     for reply in (
         b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 1\r\nContent-Length: 2\r\n\r\n{}',
-        b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 2\r\nContent-Length: 65537\r\n\r\n',
+        b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 3\r\nContent-Length: 65537\r\n\r\n',
         b'HTTP/1.1 200 OK\r\nX-Padding: '+b'a'*9000+b'\r\n\r\n',
         b'HTTP/1.1 200 OK\r\n',
     ):
@@ -190,7 +196,7 @@ def test_client_rejects_version_limits_and_slow_response(monkeypatch):
         thread=threading.Thread(target=serve);thread.start()
         try:
             with pytest.raises((ValueError,TimeoutError,OSError)):
-                module.OrdavynClient(port=listener.getsockname()[1]).send('/act',new())
+                module.OrdavynClient(port=listener.getsockname()[1], response_key=TEST_SIGNER.public_key_bytes(), participant=Identifier('participant', 'service')).send('/act',new())
         finally: thread.join()
 
 

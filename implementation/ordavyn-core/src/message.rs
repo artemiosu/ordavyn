@@ -1,5 +1,5 @@
 //! Local Ordavyn message envelope with Ed25519-authenticated metadata.
-//! Rust signs the domain-separated deterministic CBOR v2 map; transport is JSON.
+//! Rust signs the domain-separated deterministic CBOR v3 map; transport is JSON.
 
 use crate::aim::{Identifier, Instant, Reference};
 use crate::crypto::{Ed25519Keypair, Ed25519Signature, SignatureAlgorithm};
@@ -20,8 +20,12 @@ pub enum MessageType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Message {
-    /// Protocol version (currently 2).
+    /// Protocol version (currently 3).
     pub version: u8,
+    #[serde(deserialize_with = "crate::wire::required_option")]
+    pub reply_to: Option<Identifier>,
+    #[serde(deserialize_with = "crate::wire::required_option")]
+    pub request_digest: Option<String>,
     /// Message type.
     #[serde(rename = "type")]
     pub msg_type: MessageType,
@@ -50,7 +54,7 @@ pub struct Message {
     pub signature: Option<Ed25519Signature>,
     /// Send time (AIM §8.1).
     pub timestamp: Instant,
-    /// Fixed signing representation "ordavyn-cbor-v2"; JSON transport does not negotiate it.
+    /// Fixed signing representation "ordavyn-cbor-v3"; JSON transport does not negotiate it.
     pub encoding: String,
 }
 
@@ -87,7 +91,7 @@ impl Message {
 
         if self.signature_alg != Some(SignatureAlgorithm::Ed25519)
             || self.key_id.as_deref() != Some(public_key.key_id().as_str())
-            || self.encoding != "ordavyn-cbor-v2"
+            || self.encoding != "ordavyn-cbor-v3"
             || sig.algorithm != SignatureAlgorithm::Ed25519
         {
             return Err(CoreError::InvalidMessage(
@@ -99,7 +103,7 @@ impl Message {
         Ed25519Keypair::verify(public_key, &signable_bytes, sig)
     }
 
-    /// Domain-separated RFC8949 length-first deterministic CBOR v2.
+    /// Domain-separated RFC8949 length-first deterministic CBOR v3.
     pub fn canonical_signable_bytes(&self) -> Result<Vec<u8>> {
         crate::wire::signable_bytes(self)
     }
@@ -114,7 +118,9 @@ impl MessageBuilder {
     pub fn new(from: Identifier, to: Identifier) -> Self {
         Self {
             msg: Message {
-                version: 2,
+                version: 3,
+                reply_to: None,
+                request_digest: None,
                 msg_type: MessageType::Request,
                 id: Identifier::new("message", &uuid_like()),
                 operation_id: Identifier::new("logical-operation", &uuid_like()),
@@ -130,7 +136,7 @@ impl MessageBuilder {
                 key_id: None,
                 signature: None,
                 timestamp: Instant::from_nanos(0),
-                encoding: "ordavyn-cbor-v2".to_string(),
+                encoding: "ordavyn-cbor-v3".to_string(),
             },
         }
     }
@@ -198,7 +204,7 @@ mod tests {
             .payload(serde_json::json!({"action": "search", "query": "laptop"}))
             .build();
 
-        assert_eq!(msg.version, 2);
+        assert_eq!(msg.version, 3);
         assert_eq!(msg.msg_type, MessageType::Request);
         assert_eq!(msg.from, from);
         assert_eq!(msg.to, to);

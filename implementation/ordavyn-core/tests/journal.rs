@@ -132,12 +132,14 @@ fn busy_reservation_never_admitted() {
 fn dispatch_failure_stays_unknown_and_success_is_recorded() {
     for failing in [true, false] {
         let j = Arc::new(Journal::memory(recipient(), 2).unwrap());
-        let server = OrdavynServer::with_journal(recipient(), 2, j.clone()).unwrap();
+        let server = OrdavynServer::with_journal(recipient(), 2, j.clone())
+            .unwrap()
+            .with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
         let key = Ed25519Keypair::generate();
         let (s, _, _) = ids();
         server.trust(key.public_key(), s.clone(), &["act"]).unwrap();
         let guard = j.clone();
-        server.handle("/ordavyn/v2/act", move |m| {
+        server.handle("/ordavyn/v3/act", move |m| {
             assert!(guard.close().is_err());
             if failing {
                 panic!("effect may have occurred");
@@ -151,8 +153,10 @@ fn dispatch_failure_stays_unknown_and_success_is_recorded() {
             .payload(serde_json::json!({"action":"act"}))
             .build();
         msg.sign(&key).unwrap();
-        server.dispatch("/ordavyn/v2/act", &msg).unwrap();
-        assert!(server.dispatch("/ordavyn/v2/act", &msg).is_err());
+        server.dispatch("/ordavyn/v3/act", &msg).unwrap();
+        assert!(server
+            .dispatch("/ordavyn/v3/act", &msg)
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         assert_eq!(
             j.inspect().unwrap()[0].state,
             if failing {
@@ -173,7 +177,9 @@ fn durable_dispatch_never_reports_success_on_completion_commit_failure() {
     };
     let path = path();
     let j = Arc::new(Journal::create(&path, recipient(), 2).unwrap());
-    let server = OrdavynServer::with_journal(recipient(), 2, j.clone()).unwrap();
+    let server = OrdavynServer::with_journal(recipient(), 2, j.clone())
+        .unwrap()
+        .with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
     let key = Ed25519Keypair::generate();
     let (s, _, _) = ids();
     server.trust(key.public_key(), s.clone(), &["act"]).unwrap();
@@ -181,7 +187,7 @@ fn durable_dispatch_never_reports_success_on_completion_commit_failure() {
     let held = reader.clone();
     let effects = Arc::new(AtomicUsize::new(0));
     let count = effects.clone();
-    server.handle("/ordavyn/v2/act", move |mut msg| {
+    server.handle("/ordavyn/v3/act", move |mut msg| {
         let reader = held.lock().unwrap();
         reader.execute_batch("BEGIN").unwrap();
         let state: String = reader
@@ -197,9 +203,13 @@ fn durable_dispatch_never_reports_success_on_completion_commit_failure() {
         .payload(serde_json::json!({"action":"act"}))
         .build();
     msg.sign(&key).unwrap();
-    assert!(server.dispatch("/ordavyn/v2/act", &msg).is_err());
+    assert!(server
+        .dispatch("/ordavyn/v3/act", &msg)
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     reader.lock().unwrap().execute_batch("ROLLBACK").unwrap();
-    assert!(server.dispatch("/ordavyn/v2/act", &msg).is_err());
+    assert!(server
+        .dispatch("/ordavyn/v3/act", &msg)
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     assert_eq!(effects.load(Ordering::SeqCst), 1);
     assert_eq!(j.inspect().unwrap()[0].state, Outcome::OutcomeUnknown);
     j.close().unwrap();
@@ -265,12 +275,14 @@ fn durable_error_and_invalid_response_stay_unknown_after_reopen() {
             } else {
                 Journal::create(&path, recipient(), 2).unwrap()
             });
-            let server = OrdavynServer::with_journal(recipient(), 2, j.clone()).unwrap();
+            let server = OrdavynServer::with_journal(recipient(), 2, j.clone())
+                .unwrap()
+                .with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
             server
                 .trust(key.public_key(), sender.clone(), &["act"])
                 .unwrap();
             let effects = count.clone();
-            server.handle("/ordavyn/v2/act", move |mut msg| {
+            server.handle("/ordavyn/v3/act", move |mut msg| {
                 effects.fetch_add(1, Ordering::SeqCst);
                 msg.msg_type = if invalid {
                     MessageType::Response
@@ -284,9 +296,9 @@ fn durable_error_and_invalid_response_stay_unknown_after_reopen() {
                 };
                 msg
             });
-            let result = server.dispatch("/ordavyn/v2/act", &msg);
+            let result = server.dispatch("/ordavyn/v3/act", &msg);
             if reopening || invalid {
-                assert!(result.is_err());
+                assert!(result.is_ok_and(|r| r.msg_type == MessageType::Error));
             } else {
                 assert_eq!(result.unwrap().msg_type, MessageType::Error);
             }

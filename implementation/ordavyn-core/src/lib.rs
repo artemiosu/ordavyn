@@ -1,5 +1,5 @@
 //! Ordavyn local protocol primitives and protected loopback HTTP/1.1 transport.
-//! Native, role-neutral prototype; TLS, delegation, negotiation and PQ are not implemented.
+//! Native, role-neutral prototype; TLS 1.3 is optional; delegation, negotiation and PQ are not implemented.
 
 pub mod aim;
 pub mod cbor_encoding;
@@ -22,3 +22,6 @@ pub mod wire;
 
 pub mod journal;
 pub use journal::{Journal, JournalEntry, Outcome, Reservation};
+
+pub mod tls;
+pub use tls::{ClientTls, ServerTls};

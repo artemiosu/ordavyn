@@ -1,3 +1,7 @@
+
+from ordavyn import Ed25519Keypair, Identifier
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+TEST_SIGNER = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(bytes([99])*32))
 import sqlite3
 import threading
 import pytest
@@ -54,7 +58,7 @@ def test_reject_damaged_journal(tmp_path, mutation):
     if mutation == 'corrupt': path.write_bytes(b'not sqlite')
     else:
         with sqlite3.connect(path) as db:
-            if mutation == 'version': db.execute('UPDATE metadata SET version=2')
+            if mutation == 'version': db.execute('UPDATE metadata SET version=3')
             elif mutation == 'state':
                 db.execute('PRAGMA ignore_check_constraints=ON'); db.execute("UPDATE operations SET state='success'")
             elif mutation == 'identifier': db.execute("UPDATE operations SET message=x'01'")
@@ -67,7 +71,7 @@ def test_reject_damaged_journal(tmp_path, mutation):
 
 def server(journal, handler):
     key = Ed25519Keypair.generate()
-    app = Ordavyn(participant=RECIPIENT,replay_capacity=2,journal=journal)
+    app = Ordavyn(participant=RECIPIENT,replay_capacity=2,journal=journal, signer=TEST_SIGNER)
     app.trust(key.public_key_bytes(),SENDER,['act']); app.expose('/act')(handler)
     msg = MessageBuilder(SENDER,RECIPIENT).payload({'action':'act'}).build(); msg.sign(key)
     return app,msg
@@ -75,7 +79,7 @@ def server(journal, handler):
 
 def test_unauthorized_and_bad_route_do_not_reserve(journal):
     app,msg = server(journal,lambda: {})
-    assert app._handle_request(msg,'/ordavyn/v2/wrong').msg_type == MessageType.ERROR
+    assert app._handle_request(msg,'/ordavyn/v3/wrong').msg_type == MessageType.ERROR
     msg.signature = '00'*64
     assert app._handle_request(msg).msg_type == MessageType.ERROR
     assert journal.inspect() == []

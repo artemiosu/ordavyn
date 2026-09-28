@@ -1,20 +1,24 @@
-//! Bounded loopback HTTP/1.1 prototype. JSON transport, CBOR signing. No TLS.
+//! Bounded loopback HTTP/1.1 prototype. JSON transport, CBOR signing. TLS 1.3 is explicit.
 use crate::security::{invalid, valid_endpoint, SecurityPolicy, MAX_BODY, MAX_HEADERS, TIMEOUT};
 use crate::{Ed25519PublicKey, Identifier, Message, MessageBuilder, MessageType, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+trait Stream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> Stream for T {}
 use tokio::net::{TcpListener, TcpStream};
 pub const CONTENT_TYPE_JSON: &str = "application/json";
 pub const CONTENT_TYPE_CBOR: &str = "application/cbor";
 pub const VERSION_HEADER: &str = "x-ordavyn-version";
-pub const PROTOCOL_VERSION: u8 = 2;
-pub const PATH_PREFIX: &str = "/ordavyn/v2";
+pub const PROTOCOL_VERSION: u8 = 3;
+pub const PATH_PREFIX: &str = "/ordavyn/v3";
 type Handler = Arc<dyn Fn(Message) -> Message + Send + Sync>;
 #[derive(Clone)]
 pub struct OrdavynServer {
     handlers: Arc<Mutex<HashMap<String, Handler>>>,
     security: Arc<SecurityPolicy>,
+    signer: Option<Arc<crate::Ed25519Keypair>>,
+    tls: Option<crate::ServerTls>,
 }
 impl Default for OrdavynServer {
     fn default() -> Self {
@@ -27,6 +31,8 @@ impl OrdavynServer {
     }
     pub fn with_policy(recipient: Identifier, capacity: usize) -> Self {
         Self {
+            signer: None,
+            tls: None,
             handlers: Arc::new(Mutex::new(HashMap::new())),
             security: Arc::new(SecurityPolicy::new(recipient, capacity)),
         }
@@ -37,9 +43,39 @@ impl OrdavynServer {
         journal: Arc<crate::Journal>,
     ) -> Result<Self> {
         Ok(Self {
+            signer: None,
+            tls: None,
             handlers: Arc::new(Mutex::new(HashMap::new())),
             security: Arc::new(SecurityPolicy::with_journal(recipient, capacity, journal)?),
         })
+    }
+    /// Configure before cloning or using the server; changes require a new object.
+    pub fn with_signer(mut self, signer: crate::Ed25519Keypair) -> Self {
+        assert_eq!(
+            Arc::strong_count(&self.security),
+            1,
+            "configure before cloning"
+        );
+        assert!(self.signer.is_none(), "signer is immutable");
+        self.signer = Some(Arc::new(signer));
+        self
+    }
+    pub fn with_tls(mut self, tls: crate::ServerTls) -> Self {
+        assert_eq!(
+            Arc::strong_count(&self.security),
+            1,
+            "configure before cloning"
+        );
+        assert!(self.tls.is_none(), "TLS is immutable");
+        self.tls = Some(tls);
+        self
+    }
+    pub fn response_key(&self) -> Result<Ed25519PublicKey> {
+        Ok(self
+            .signer
+            .as_ref()
+            .ok_or_else(|| invalid("server signer required"))?
+            .public_key())
     }
     pub fn trust(
         &self,
@@ -79,43 +115,61 @@ impl OrdavynServer {
     }
     /// All direct and HTTP calls pass this gate. Failed actions retain their reservation.
     pub fn dispatch(&self, path: &str, msg: &Message) -> Result<Message> {
+        let signer = self
+            .signer
+            .as_ref()
+            .ok_or_else(|| invalid("server signer required"))?;
         crate::wire::validate(msg, false)?;
-        let action = path
-            .strip_prefix(&format!("{PATH_PREFIX}/"))
-            .ok_or_else(|| invalid("route mismatch"))?;
-        if !valid_endpoint(&format!("/{action}")) {
-            return Err(invalid("invalid route"));
+        if msg.msg_type != MessageType::Request || msg.to != self.security.recipient {
+            return Err(invalid("invalid request recipient or type"));
         }
-        let handler = self
-            .handlers
-            .lock()
-            .map_err(|_| invalid("handlers unavailable"))?
-            .get(path)
-            .cloned()
-            .ok_or_else(|| invalid("unknown route"))?;
-        let reservation = self.security.authorize_and_reserve(msg, action)?;
+        let digest = crate::wire::request_digest(msg)?;
         let mut response = MessageBuilder::new(self.security.recipient.clone(), msg.from.clone())
             .operation_id(msg.operation_id.clone())
             .subject(msg.subject.clone())
             .epoch(msg.epoch.clone())
             .build();
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(msg.clone()))) {
-            Ok(result) => {
-                response.msg_type = if result.msg_type == MessageType::Error {
-                    MessageType::Error
-                } else {
-                    MessageType::Response
-                };
-                response.payload = result.payload;
+        response.reply_to = Some(msg.id.clone());
+        response.request_digest = Some(digest);
+        // Keep admission owned through signing and both serialization budgets.
+        let mut reservation = None;
+        let outcome: Result<()> = (|| {
+            let action = path
+                .strip_prefix(&format!("{PATH_PREFIX}/"))
+                .ok_or_else(|| invalid("route mismatch"))?;
+            if !valid_endpoint(&format!("/{action}")) {
+                return Err(invalid("invalid route"));
             }
-            Err(_) => {
-                response.msg_type = MessageType::Error;
-                response.payload = serde_json::json!({"error":"handler failed"});
+            let handler = self
+                .handlers
+                .lock()
+                .map_err(|_| invalid("handlers unavailable"))?
+                .get(path)
+                .cloned()
+                .ok_or_else(|| invalid("unknown route"))?;
+            reservation = Some(self.security.authorize_and_reserve(msg, action)?);
+            let result =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(msg.clone())))
+                    .map_err(|_| invalid("handler failed; outcome may be unknown"))?;
+            response.msg_type = if result.msg_type == MessageType::Error {
+                MessageType::Error
+            } else {
+                MessageType::Response
+            };
+            response.payload = result.payload;
+            response.sign(signer)?;
+            crate::wire::to_json(&response)?;
+            if response.msg_type == MessageType::Response {
+                reservation.as_ref().unwrap().complete()?;
             }
-        }
-        crate::wire::validate(&response, false)?;
-        if response.msg_type == MessageType::Response {
-            reservation.complete()?;
+            Ok(())
+        })();
+        if let Err(error) = outcome {
+            response.msg_type = MessageType::Error;
+            response.payload =
+                serde_json::json!({"error": format!("{error}; effect may have occurred")});
+            response.sign(signer)?;
+            crate::wire::to_json(&response)?;
         }
         Ok(response)
     }
@@ -134,7 +188,7 @@ impl OrdavynServer {
                     tokio::select! {
                         biased;
                         _ = self.security.stopped() => return Ok(()),
-                        _ = self.connection(&mut socket, tokio::time::Instant::now() + TIMEOUT) => {}
+                        _ = self.accept_connection(&mut socket, tokio::time::Instant::now() + TIMEOUT) => {}
                     }
                 }
             }
@@ -168,13 +222,32 @@ impl OrdavynServer {
                 let (mut socket, _) = tokio::time::timeout_at(deadline, listener.accept())
                     .await.map_err(|_| invalid("HTTP deadline"))?
                     .map_err(|_| invalid("accept failed"))?;
-                self.connection(&mut socket, deadline).await
+                self.accept_connection(&mut socket, deadline).await
             } => result
+        }
+    }
+    async fn accept_connection(
+        &self,
+        socket: &mut TcpStream,
+        deadline: tokio::time::Instant,
+    ) -> Result<()> {
+        if let Some(tls) = &self.tls {
+            let acceptor = tokio_rustls::TlsAcceptor::from(tls.config.clone());
+            let mut stream = tokio::time::timeout_at(deadline, acceptor.accept(socket))
+                .await
+                .map_err(|_| invalid("TLS deadline"))?
+                .map_err(|_| invalid("TLS handshake failed"))?;
+            if stream.get_ref().1.alpn_protocol() != Some(b"http/1.1") {
+                return Err(invalid("TLS ALPN mismatch"));
+            }
+            self.connection(&mut stream, deadline).await
+        } else {
+            self.connection(socket, deadline).await
         }
     }
     async fn connection(
         &self,
-        socket: &mut TcpStream,
+        socket: &mut impl Stream,
         deadline: tokio::time::Instant,
     ) -> Result<()> {
         // A network deadline closes the connection without a fresh error-write
@@ -195,19 +268,13 @@ impl OrdavynServer {
             let path = parts[1].to_owned();
             let server = self.clone();
             let work = self.security.begin_worker()?;
-            let mut response = tokio::task::spawn_blocking(move || {
+            let response = tokio::task::spawn_blocking(move || {
                 let _work = work;
                 server.dispatch(&path, &msg)
-            }).await.map_err(|_| invalid("dispatch worker failed"))??;
-            // Dispatch already validated the model. Only the actual JSON byte
-            // budget can fail here; retain correlation and the replay reservation.
-            let bytes = serde_json::to_vec(&response).map_err(|_| invalid("invalid response"))?;
-            if bytes.len() > MAX_BODY {
-                response.msg_type = MessageType::Error;
-                response.payload = serde_json::json!({"error":"response exceeds HTTP byte limit; effect may have occurred"});
-                return crate::wire::to_json(&response);
-            }
-            Ok(bytes)
+            })
+            .await
+            .map_err(|_| invalid("dispatch worker failed"))??;
+            crate::wire::to_json(&response)
         }
         .await;
         if tokio::time::Instant::now() >= deadline {
@@ -234,7 +301,7 @@ async fn local_listener(addr: &str) -> Result<TcpListener> {
         .map_err(|_| invalid("bind failed"))
 }
 fn check_headers(headers: &HashMap<String, String>) -> Result<()> {
-    if headers.get(VERSION_HEADER).map(String::as_str) != Some("2")
+    if headers.get(VERSION_HEADER).map(String::as_str) != Some("3")
         || headers.get("content-type").map(String::as_str) != Some(CONTENT_TYPE_JSON)
         || headers.contains_key("transfer-encoding")
     {
@@ -242,7 +309,9 @@ fn check_headers(headers: &HashMap<String, String>) -> Result<()> {
     }
     Ok(())
 }
-async fn read_http(socket: &mut TcpStream) -> Result<(String, HashMap<String, String>, Vec<u8>)> {
+async fn read_http(
+    socket: &mut (impl Stream + ?Sized),
+) -> Result<(String, HashMap<String, String>, Vec<u8>)> {
     let mut raw = Vec::new();
     let header_end = loop {
         if let Some(i) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
@@ -311,8 +380,8 @@ async fn read_http(socket: &mut TcpStream) -> Result<(String, HashMap<String, St
     }
     Ok((line, headers, body))
 }
-async fn write_http(socket: &mut TcpStream, status: u16, body: &[u8]) -> Result<()> {
-    let head = format!("HTTP/1.1 {status} Result\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 2\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+async fn write_http(socket: &mut (impl Stream + ?Sized), status: u16, body: &[u8]) -> Result<()> {
+    let head = format!("HTTP/1.1 {status} Result\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 3\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
     socket
         .write_all(head.as_bytes())
         .await
@@ -324,12 +393,24 @@ async fn write_http(socket: &mut TcpStream, status: u16, body: &[u8]) -> Result<
 }
 pub struct OrdavynClient {
     base_url: String,
+    pin: Option<(Ed25519PublicKey, Identifier)>,
+    tls: Option<crate::ClientTls>,
 }
 impl OrdavynClient {
     pub fn new(base_url: &str) -> Self {
         Self {
             base_url: base_url.into(),
+            pin: None,
+            tls: None,
         }
+    }
+    pub fn with_response_key(mut self, key: Ed25519PublicKey, participant: Identifier) -> Self {
+        self.pin = Some((key, participant));
+        self
+    }
+    pub fn with_tls(mut self, tls: crate::ClientTls) -> Self {
+        self.tls = Some(tls);
+        self
     }
     pub async fn send(&self, endpoint: &str, msg: &Message) -> Result<Message> {
         tokio::time::timeout(TIMEOUT, self.send_inner(endpoint, msg))
@@ -340,10 +421,26 @@ impl OrdavynClient {
         if !valid_endpoint(endpoint) {
             return Err(invalid("invalid endpoint"));
         }
+        let (pin_key, participant) = self
+            .pin
+            .as_ref()
+            .ok_or_else(|| invalid("local response pin required"))?;
+        if participant != &msg.to
+            || participant.namespace != "participant"
+            || !participant.is_valid()
+        {
+            return Err(invalid("response participant mismatch"));
+        }
+        let digest = crate::wire::request_digest(msg)?;
+        let scheme = if self.tls.is_some() {
+            "https://"
+        } else {
+            "http://"
+        };
         let host = self
             .base_url
-            .strip_prefix("http://")
-            .ok_or_else(|| invalid("HTTP URL required"))?;
+            .strip_prefix(scheme)
+            .ok_or_else(|| invalid("transport configuration mismatch"))?;
         let addr: std::net::SocketAddr = host
             .parse()
             .map_err(|_| invalid("numeric loopback address required"))?;
@@ -354,10 +451,22 @@ impl OrdavynClient {
         if body.len() > MAX_BODY {
             return Err(invalid("body limit"));
         }
-        let mut socket = TcpStream::connect(addr)
+        let socket = TcpStream::connect(addr)
             .await
             .map_err(|_| invalid("connect failed"))?;
-        let header = format!("POST {PATH_PREFIX}{endpoint} HTTP/1.1\r\nHost: {host}\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 2\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+        let mut socket: Box<dyn Stream> = if let Some(tls) = &self.tls {
+            let stream = tokio_rustls::TlsConnector::from(tls.config.clone())
+                .connect(tls.name.clone(), socket)
+                .await
+                .map_err(|_| invalid("TLS handshake failed"))?;
+            if stream.get_ref().1.alpn_protocol() != Some(b"http/1.1") {
+                return Err(invalid("TLS ALPN mismatch"));
+            }
+            Box::new(stream)
+        } else {
+            Box::new(socket)
+        };
+        let header = format!("POST {PATH_PREFIX}{endpoint} HTTP/1.1\r\nHost: {host}\r\nContent-Type: {CONTENT_TYPE_JSON}\r\n{VERSION_HEADER}: 3\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
         socket
             .write_all(header.as_bytes())
             .await
@@ -372,7 +481,7 @@ impl OrdavynClient {
             return Err(invalid("HTTP request rejected"));
         }
         let result: Message = crate::json::message(&body)?;
-        if result.version != 2
+        if result.version != 3
             || result.encoding != crate::wire::ENCODING
             || !matches!(result.msg_type, MessageType::Response | MessageType::Error)
             || result.from != msg.to
@@ -380,9 +489,10 @@ impl OrdavynClient {
             || result.operation_id != msg.operation_id
             || result.subject != msg.subject
             || result.epoch != msg.epoch
-            || result.signature.is_some()
-            || result.key_id.is_some()
-            || result.signature_alg.is_some()
+            || result.reply_to.as_ref() != Some(&msg.id)
+            || result.request_digest.as_ref() != Some(&digest)
+            || &result.from != participant
+            || result.verify_signature(pin_key).is_err()
         {
             return Err(invalid("invalid response envelope"));
         }
@@ -441,7 +551,8 @@ mod lifecycle_tests {
                 .await
                 .unwrap()
                 .unwrap();
-            let server = OrdavynServer::new();
+            let server =
+                OrdavynServer::new().with_signer(crate::Ed25519Keypair::from_seed([99; 32]));
             let key = crate::Ed25519Keypair::generate();
             server
                 .trust(
@@ -450,7 +561,7 @@ mod lifecycle_tests {
                     &["act"],
                 )
                 .unwrap();
-            server.handle("/ordavyn/v2/act", |_| {
+            server.handle("/ordavyn/v3/act", |_| {
                 panic!("stopped queued work was admitted")
             });
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -466,6 +577,10 @@ mod lifecycle_tests {
             request.sign(&key).unwrap();
             let client = tokio::spawn(async move {
                 OrdavynClient::new(&format!("http://{address}"))
+                    .with_response_key(
+                        crate::Ed25519Keypair::from_seed([99; 32]).public_key(),
+                        crate::Identifier::new("participant", "service"),
+                    )
                     .send("/act", &request)
                     .await
             });

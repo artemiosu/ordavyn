@@ -14,13 +14,24 @@ from .wire import strict_json, validate_envelope
 
 
 class Ordavyn:
-    def __init__(self, app=None, host='127.0.0.1', port=8080, *, participant=None, replay_capacity=10000, journal=None):
+    def __init__(self, app=None, host='127.0.0.1', port=8080, *, participant=None, replay_capacity=10000, journal=None, signer=None, tls=None):
         if app is not None:
             raise ValueError('Framework app integration is not implemented; use standalone Ordavyn')
         if host not in ('127.0.0.1', 'localhost'):
             raise ValueError('local prototype: loopback only')
         self.host, self.port = host, port
         self.security = SecurityPolicy(participant or Identifier('participant', 'service'), replay_capacity, journal=journal)
+        from .crypto import Ed25519Keypair
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from .tls import ServerTLS
+        if not isinstance(signer, Ed25519Keypair):
+            raise ValueError('explicit server Ed25519 signer required')
+        seed = signer._private_key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+        self.__signer = Ed25519Keypair(Ed25519PrivateKey.from_private_bytes(seed))
+        if tls is not None and type(tls) is not ServerTLS:
+            raise ValueError('ServerTLS configuration required')
+        self.__tls_context = tls.context() if tls is not None else None
         self._handlers = {}
         self._running = False
         self._server_sock = None
@@ -56,43 +67,65 @@ class Ordavyn:
     def _handle_request(self, msg, path=None):
         # Take an independent snapshot; never mutate the signed request.
         msg = copy.deepcopy(msg)
+        from .wire import request_digest
+        validate_envelope(msg.to_dict())
+        if msg.msg_type != MessageType.REQUEST or msg.to_id != self.security.recipient:
+            raise SecurityError('invalid request recipient or type')
+        digest = request_digest(msg)
         response = (MessageBuilder(self.security.recipient, msg.from_id)
                     .operation_id(msg.operation_id).subject(msg.subject).epoch(msg.epoch).build())
+        response.reply_to = msg.id
+        response.request_digest = digest
         reservation = object()
         try:
-            validate_envelope(msg.to_dict())
-            action = msg.payload.get('action') if isinstance(msg.payload, dict) else None
-            if not isinstance(action, str) or not valid_endpoint('/' + action):
-                raise SecurityError('invalid action')
-            expected = PATH_PREFIX + '/' + action
-            if path is None:
-                path = expected
-            handler = self._handlers.get(path)
-            if path != expected or handler is None:
-                raise SecurityError('route mismatch')
-            self.security.authorize_and_reserve(msg, action, reservation)
-            params = dict(msg.payload)
-            del params['action']
-            result = handler(**params)
-            response.msg_type = MessageType.RESPONSE
-            response.payload = result if isinstance(result, dict) else {'result': result}
-            validate_envelope(response.to_dict())
-            self.security.journal.complete(reservation)
-        except Exception as exc:
-            response.msg_type = MessageType.ERROR
-            response.payload = {'error': str(exc) if isinstance(exc, (SecurityError, JournalError)) else 'handler_or_input_error'}
+            try:
+                action = msg.payload.get('action') if isinstance(msg.payload, dict) else None
+                if not isinstance(action, str) or not valid_endpoint('/' + action):
+                    raise SecurityError('invalid action')
+                expected = PATH_PREFIX + '/' + action
+                if path is None:
+                    path = expected
+                handler = self._handlers.get(path)
+                if path != expected or handler is None:
+                    raise SecurityError('route mismatch')
+                self.security.authorize_and_reserve(msg, action, reservation)
+                params = dict(msg.payload)
+                del params['action']
+                result = handler(**params)
+                response.msg_type = MessageType.RESPONSE
+                response.payload = result if isinstance(result, dict) else {'result': result}
+            except Exception as exc:
+                response.msg_type = MessageType.ERROR
+                response.payload = {'error': str(exc) if isinstance(exc, (SecurityError, JournalError)) else 'handler_or_input_error; outcome may be unknown'}
+            try:
+                response.sign(self.__signer)
+                response.to_json()
+                if response.msg_type == MessageType.RESPONSE:
+                    self.security.journal.complete(reservation)
+            except Exception:
+                response.msg_type = MessageType.ERROR
+                response.payload = {'error': 'response unavailable or exceeds limits; effect may have occurred'}
+                response.sign(self.__signer)
+                response.to_json()
+            return response
         finally:
             self.security.finish(reservation)
-        return response
 
     def _handle_connection(self, conn):
+        deadline = time.monotonic() + TIMEOUT
         try:
-            self._process_connection(conn)
+            if self.__tls_context is not None:
+                conn.settimeout(max(0.001, deadline - time.monotonic()))
+                conn = self.__tls_context.wrap_socket(conn, server_side=True)
+                if conn.selected_alpn_protocol() != 'http/1.1':
+                    raise ValueError('TLS ALPN mismatch')
+            self._process_connection(conn, deadline)
+        except (OSError, ValueError):
+            pass
         finally:
             conn.close()
 
-    def _process_connection(self, conn):
-        deadline = time.monotonic() + TIMEOUT
+    def _process_connection(self, conn, deadline):
         def receive(size):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -121,7 +154,7 @@ class Ordavyn:
                 if k in headers:
                     raise ValueError('duplicate header')
                 headers[k] = v.strip()
-            if (method != 'POST' or http_version != 'HTTP/1.1' or headers.get(VERSION_HEADER) != '2'
+            if (method != 'POST' or http_version != 'HTTP/1.1' or headers.get(VERSION_HEADER) != '3'
                     or headers.get('content-type') != 'application/json' or 'transfer-encoding' in headers):
                 raise ValueError('unsupported HTTP metadata')
             length_text = headers.get('content-length', '')
@@ -134,15 +167,8 @@ class Ordavyn:
                 data += receive(min(4096, length - len(data)))
             msg = Message.from_dict(strict_json(data))
             response = self._handle_request(msg, path)
-            try:
-                body = response.to_json().encode('utf-8')
-            except ValueError as exc:
-                if str(exc) != 'body exceeds 64KiB':
-                    raise
-                response.msg_type = MessageType.ERROR
-                response.payload = {'error': 'response exceeds HTTP byte limit; effect may have occurred'}
-                body = response.to_json().encode('utf-8')
-            status = 200 if response.msg_type == MessageType.RESPONSE else 403
+            body = response.to_json().encode('utf-8')
+            status = 200
         except Exception:
             pass
         try:
@@ -150,7 +176,7 @@ class Ordavyn:
             if remaining <= 0:
                 raise TimeoutError('response deadline')
             conn.settimeout(remaining)
-            conn.sendall((f'HTTP/1.1 {status} Result\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 2\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n').encode('ascii') + body)
+            conn.sendall((f'HTTP/1.1 {status} Result\r\nContent-Type: application/json\r\n{VERSION_HEADER}: 3\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n').encode('ascii') + body)
         except OSError:
             pass
         finally:
@@ -177,7 +203,7 @@ class Ordavyn:
                     self.security._condition.notify_all()
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sock.bind((self.host, self.port))
+                sock.bind(('127.0.0.1', self.port))
                 sock.listen(16)
                 sock.settimeout(0.1)
                 self.port = sock.getsockname()[1]
@@ -236,6 +262,8 @@ class Ordavyn:
             return not thread.is_alive()
         return thread is None or not thread.is_alive()
 
-    def client(self, keypair=None):
-        client = OrdavynClient(self.host, self.port)
+    def client(self, keypair=None, *, tls=None):
+        if self.__tls_context is not None and tls is None:
+            raise ValueError('explicit client TLS trust required')
+        client = OrdavynClient(self.host, self.port, response_key=self.__signer.public_key_bytes(), participant=self.security.recipient, tls=tls)
         return client.with_keypair(keypair) if keypair else client

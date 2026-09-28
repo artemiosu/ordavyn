@@ -1,5 +1,21 @@
 # Ordavyn release status
 
+Current local profile: wire v3, signed request-bound responses with explicit protocol
+pins and optional explicitly configured TLS 1.3. See [wire v3](LOCAL-WIRE-V3.md) and
+[threat model](LOCAL-THREAT-MODEL.md). SQLite format and pre-push are unchanged.
+Итог защищённого обмена (2026-09-28): 96 тестов Rust и release build прошли.
+В каждой независимой установке wheel и sdist: 249 SDK +35 recovery +119 TLS/ответы
+(403 проверки); живой обмен двух SDK, демо и примеры руководств выполнены.
+Три направления BMAD-ревью завершены, принятые замечания закрыты и проверены.
+Прежнее расхождение HTTP ошибок R2-B4 устранено: protocol success/error используют
+одинаковую проверку подписанного ответа. Сохраняется ограничение: ошибки клиента
+после отправки не имеют отдельного структурированного unknown-outcome с ID;
+приложение сохраняет запрос и сверяет возможный эффект без автоматического повтора.
+Это локальный экспериментальный профиль, не одобрение публичной эксплуатации.
+
+The sections below record historical stages; their v2/unsigned/no-TLS statements
+do not describe the current candidate. No release or publication is approved.
+
 Local migration candidate only. Publication remains blocked pending checks of the exact release contents
 and a separately approved public file set. No push or publication was
 performed; the local pre-push hook remains a blocking control.

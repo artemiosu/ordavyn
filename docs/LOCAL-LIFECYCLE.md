@@ -35,7 +35,7 @@ caller = Identifier('participant', 'caller')
 service = Identifier('participant', 'service')
 old = Ed25519Keypair.generate()
 new = Ed25519Keypair.generate()
-server = Ordavyn(port=0, participant=service)
+server = Ordavyn(port=0, participant=service, signer=Ed25519Keypair.generate())
 server.trust(old.public_key_bytes(), caller, ['status'])
 server.expose('/status')(lambda: {'ready': True})
 request = MessageBuilder(caller, service).payload({'action': 'status'}).build()
@@ -115,5 +115,9 @@ application configuration. Journals never store keys or permissions. SQLite
 replay barriers survive reopen and key changes; memory barriers last only as long
 as that journal object. See [LOCAL-JOURNAL.md](LOCAL-JOURNAL.md).
 
-This is local admission control, not distributed revocation, TLS, production
-approval or a public release. Wire v2 and the SQLite schema remain unchanged.
+TLS handshakes and response signing/serialization are included in work accounting.
+This is local admission control, not distributed revocation or release approval.
+Wire v3 is incompatible; the SQLite schema remains unchanged.
+
+See the [authenticated v3 exchange guide](LOCAL-WIRE-V3.md) for explicit TLS 1.3 configuration,
+protocol pins, HTTP test mode without confidentiality and the threat model.

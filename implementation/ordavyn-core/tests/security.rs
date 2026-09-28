@@ -7,11 +7,13 @@ use std::sync::{
     Arc,
 };
 fn setup(cap: usize, fail: bool) -> (OrdavynServer, Ed25519Keypair, Arc<AtomicUsize>) {
-    let server = OrdavynServer::new();
+    let server =
+        OrdavynServer::new().with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
     let server = if cap == 10000 {
         server
     } else {
         OrdavynServer::with_policy(Identifier::new("participant", "service"), cap)
+            .with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]))
     };
     let key = Ed25519Keypair::generate();
     server
@@ -60,7 +62,7 @@ fn negative_matrix() {
                 assert!(msg.sign(&key).is_err());
             }
             7 => {
-                msg.msg_type = MessageType::Response;
+                msg.msg_type = MessageType::Event;
                 msg.sign(&key).unwrap();
             }
             8 => {
@@ -84,7 +86,7 @@ fn negative_matrix() {
         assert!(
             server
                 .dispatch(&format!("{PATH_PREFIX}/act"), &msg)
-                .is_err(),
+                .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error),
             "case {case}"
         );
     }
@@ -93,7 +95,7 @@ fn negative_matrix() {
     let response = server
         .dispatch(&format!("{PATH_PREFIX}/act"), &msg)
         .unwrap();
-    assert!(!response.is_signed());
+    assert!(response.is_signed());
     assert_ne!(response.id, msg.id);
     assert!(msg.verify_signature(&key.public_key()).is_ok());
     assert_eq!(effects.load(Ordering::SeqCst), 1);
@@ -117,13 +119,13 @@ fn replay_concurrent_failure_operation_capacity() {
     retry.sign(&key).unwrap();
     assert!(server
         .dispatch(&format!("{PATH_PREFIX}/act"), &retry)
-        .is_err());
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     assert!(server
         .dispatch(&format!("{PATH_PREFIX}/act"), &message(&key))
-        .is_err());
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     assert!(server
         .dispatch(&format!("{PATH_PREFIX}/act"), &msg)
-        .is_err());
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     assert_eq!(effects.load(Ordering::SeqCst), 1);
 }
 #[test]
@@ -143,13 +145,13 @@ fn object_array_and_permission_and_size() {
         .unwrap();
     assert!(server
         .dispatch(&format!("{PATH_PREFIX}/act"), &message(&key))
-        .is_err());
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     let mut msg = message(&key);
     msg.payload["value"] = serde_json::json!("a".repeat(65536));
     assert!(msg.sign(&key).is_err());
     assert!(server
         .dispatch(&format!("{PATH_PREFIX}/act"), &msg)
-        .is_err());
+        .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
     assert_eq!(effects.load(Ordering::SeqCst), 0);
 }
 #[tokio::test]
@@ -161,7 +163,10 @@ async fn http_roundtrip_and_rejections() {
         let task = tokio::spawn(async move {
             server.serve_listener_one(listener).await.unwrap();
         });
-        let client = OrdavynClient::new(&format!("http://{addr}"));
+        let client = OrdavynClient::new(&format!("http://{addr}")).with_response_key(
+            ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+            ordavyn_core::Identifier::new("participant", "service"),
+        );
         let mut msg = message(&key);
         if case == 1 {
             msg.signature = None;
@@ -178,12 +183,15 @@ async fn http_roundtrip_and_rejections() {
         let result = client
             .send(if case == 4 { "/wrong" } else { "/act" }, &msg)
             .await;
-        assert_eq!(result.is_ok(), case == 0);
+        assert_eq!(
+            result.is_ok_and(|r| r.msg_type == MessageType::Response),
+            case == 0
+        );
         assert_eq!(
             effects.load(Ordering::SeqCst),
             if case == 0 { 1 } else { 0 }
         );
-        if case == 2 {
+        if matches!(case, 1 | 2 | 3) {
             task.abort();
         } else {
             task.await.unwrap();
@@ -202,7 +210,7 @@ async fn fragmented_http_and_input_metadata_limits() {
             server.serve_listener_one(listener).await.unwrap();
         });
         let body = serde_json::to_vec(&message(&key)).unwrap();
-        let version = if case == 1 { "1" } else { "2" };
+        let version = if case == 1 { "1" } else { "3" };
         let length = if case == 2 { 65537 } else { body.len() };
         let extra = match case {
             3 => "Transfer-Encoding: chunked\r\n".to_string(),
@@ -251,12 +259,15 @@ async fn client_rejects_response_version_and_limits() {
             let _ = sock.read(&mut buf).await;
             let reply=match case {
                 0=>"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 1\r\nContent-Length: 2\r\n\r\n{}".to_string(),
-                1=>"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 2\r\nContent-Length: 65537\r\n\r\n".to_string(),
+                1=>"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 3\r\nContent-Length: 65537\r\n\r\n".to_string(),
                 _=>format!("HTTP/1.1 200 OK\r\nX-Padding: {}\r\n\r\n","a".repeat(9000)),
             };
             let _ = sock.write_all(reply.as_bytes()).await;
         });
-        let client = OrdavynClient::new(&format!("http://{addr}"));
+        let client = OrdavynClient::new(&format!("http://{addr}")).with_response_key(
+            ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+            ordavyn_core::Identifier::new("participant", "service"),
+        );
         assert!(client
             .send("/act", &message(&Ed25519Keypair::generate()))
             .await
@@ -284,9 +295,16 @@ async fn http_replay_same_operation_has_one_effect() {
         request.operation_id = first.operation_id.clone();
         request.sign(&key).unwrap();
         let result = OrdavynClient::new(&format!("http://{addr}"))
+            .with_response_key(
+                ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+                ordavyn_core::Identifier::new("participant", "service"),
+            )
             .send("/act", &request)
             .await;
-        assert_eq!(result.is_ok(), case == 0);
+        assert_eq!(
+            result.is_ok_and(|r| r.msg_type == MessageType::Response),
+            case == 0
+        );
         task.await.unwrap();
     }
     assert_eq!(effects.load(Ordering::SeqCst), 1);
@@ -305,8 +323,8 @@ fn message_id_replay_with_fresh_operation_and_spare_capacity() {
     retry.sign(&key).unwrap();
     let err = server
         .dispatch(&format!("{PATH_PREFIX}/act"), &retry)
-        .unwrap_err();
-    assert!(err.to_string().contains("replay"));
+        .unwrap();
+    assert!(err.payload["error"].as_str().unwrap().contains("replay"));
     assert_eq!(effects.load(Ordering::SeqCst), 1);
     server
         .dispatch(&format!("{PATH_PREFIX}/act"), &message(&key))
@@ -349,6 +367,9 @@ async fn client_checks_each_response_correlation_field() {
             .msg_type(MessageType::Response)
             .payload(serde_json::json!({"ok":true}))
             .build();
+        response.reply_to = Some(request.id.clone());
+        response.request_digest = Some(ordavyn_core::wire::request_digest(&request).unwrap());
+        response.sign(&Ed25519Keypair::from_seed([99; 32])).unwrap();
         match case {
             1 => response.operation_id.value = "other".into(),
             2 => response.from.value = "other".into(),
@@ -364,12 +385,16 @@ async fn client_checks_each_response_correlation_field() {
             let mut buf = [0u8; 4096];
             let _ = socket.read(&mut buf).await;
             let body = serde_json::to_vec(&response).unwrap();
-            let version = if case == 6 { 1 } else { 2 };
+            let version = if case == 6 { 1 } else { 3 };
             let header=format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: {version}\r\nContent-Length: {}\r\n\r\n",body.len());
             socket.write_all(header.as_bytes()).await.unwrap();
             socket.write_all(&body).await.unwrap();
         });
         let result = OrdavynClient::new(&format!("http://{addr}"))
+            .with_response_key(
+                ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+                ordavyn_core::Identifier::new("participant", "service"),
+            )
             .send("/act", &request)
             .await;
         assert_eq!(result.is_ok(), case == 0, "correlation case {case}");
@@ -387,7 +412,7 @@ async fn stalled_request_hits_server_deadline() {
     let task = tokio::spawn(async move { server.serve_listener_one(listener).await });
     let mut socket = tokio::net::TcpStream::connect(addr).await.unwrap();
     socket
-        .write_all(b"POST /ordavyn/v2/act HTTP/1.1\r\n")
+        .write_all(b"POST /ordavyn/v3/act HTTP/1.1\r\n")
         .await
         .unwrap();
     let started = std::time::Instant::now();
@@ -420,10 +445,13 @@ async fn slow_response_hits_client_deadline() {
         let (mut socket, _) = listener.accept().await.unwrap();
         let mut buf = [0u8; 4096];
         let _ = socket.read(&mut buf).await;
-        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 2\r\nContent-Length: 2\r\n\r\n{").await.unwrap();
+        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nx-ordavyn-version: 3\r\nContent-Length: 2\r\n\r\n{").await.unwrap();
         tokio::time::sleep(TIMEOUT + std::time::Duration::from_secs(5)).await;
     });
-    let client = OrdavynClient::new(&format!("http://{addr}"));
+    let client = OrdavynClient::new(&format!("http://{addr}")).with_response_key(
+        ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+        ordavyn_core::Identifier::new("participant", "service"),
+    );
     let request = message(&Ed25519Keypair::generate());
     let started = std::time::Instant::now();
     let err = tokio::time::timeout(
@@ -441,7 +469,8 @@ async fn slow_response_hits_client_deadline() {
 #[test]
 fn invalid_handler_models_keep_reservation() {
     for deep in [false, true] {
-        let server = OrdavynServer::new();
+        let server =
+            OrdavynServer::new().with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32]));
         let key = Ed25519Keypair::generate();
         server
             .trust(
@@ -452,7 +481,7 @@ fn invalid_handler_models_keep_reservation() {
             .unwrap();
         let effects = Arc::new(AtomicUsize::new(0));
         let count = effects.clone();
-        server.handle("/ordavyn/v2/act", move |mut msg| {
+        server.handle("/ordavyn/v3/act", move |mut msg| {
             count.fetch_add(1, Ordering::SeqCst);
             let mut value = serde_json::json!("x".repeat(if deep { 1 } else { 65536 }));
             if deep {
@@ -464,15 +493,21 @@ fn invalid_handler_models_keep_reservation() {
             msg
         });
         let request = message(&key);
-        assert!(server.dispatch("/ordavyn/v2/act", &request).is_err());
-        assert!(server.dispatch("/ordavyn/v2/act", &request).is_err());
+        assert!(server
+            .dispatch("/ordavyn/v3/act", &request)
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
+        assert!(server
+            .dispatch("/ordavyn/v3/act", &request)
+            .map_or(true, |m| m.msg_type == ordavyn_core::MessageType::Error));
         assert_eq!(effects.load(Ordering::SeqCst), 1);
     }
 }
 
 #[tokio::test]
 async fn oversized_json_response_keeps_correlation_and_reservation() {
-    let server = Arc::new(OrdavynServer::new());
+    let server = Arc::new(
+        OrdavynServer::new().with_signer(ordavyn_core::Ed25519Keypair::from_seed([99; 32])),
+    );
     let key = Ed25519Keypair::generate();
     server
         .trust(
@@ -483,7 +518,7 @@ async fn oversized_json_response_keeps_correlation_and_reservation() {
         .unwrap();
     let effects = Arc::new(AtomicUsize::new(0));
     let count = effects.clone();
-    server.handle("/ordavyn/v2/act", move |mut msg| {
+    server.handle("/ordavyn/v3/act", move |mut msg| {
         count.fetch_add(1, Ordering::SeqCst);
         msg.payload = serde_json::json!({"value":"\n".repeat(40000)});
         msg
@@ -493,12 +528,16 @@ async fn oversized_json_response_keeps_correlation_and_reservation() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let serving = server.clone();
-        let task = tokio::spawn(async move { serving.serve_listener_one(listener).await.unwrap() });
+        let task = tokio::spawn(async move { serving.serve_listener_one(listener).await });
         let result = OrdavynClient::new(&format!("http://{addr}"))
+            .with_response_key(
+                ordavyn_core::Ed25519Keypair::from_seed([99; 32]).public_key(),
+                ordavyn_core::Identifier::new("participant", "service"),
+            )
             .send("/act", &request)
             .await;
         if retry {
-            assert!(result.is_err());
+            assert!(result.is_ok_and(|r| r.msg_type == MessageType::Error));
         } else {
             let response = result.unwrap();
             assert_eq!(response.msg_type, MessageType::Error);

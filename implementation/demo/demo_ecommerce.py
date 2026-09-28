@@ -1,11 +1,12 @@
-"""Local wire-v2 simulated order; no real purchases. Run after installing the SDK."""
+"""Local wire-v3 simulated order; no real purchases. Run after installing the SDK."""
+
 from ordavyn import Ordavyn, Identifier, MessageBuilder, MessageType, Ed25519Keypair
 
 
 def main():
     caller, shop = Identifier('participant', 'caller'), Identifier('participant', 'shop')
     key = Ed25519Keypair.generate()
-    bridge = Ordavyn(port=0, participant=shop)
+    bridge = Ordavyn(port=0, participant=shop, signer=Ed25519Keypair.generate())
     bridge.trust(key.public_key_bytes(), caller, ['buy'])
     orders = []
     @bridge.expose('/buy', consequential=True)

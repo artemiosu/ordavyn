@@ -1,10 +1,10 @@
-//! Experimental v2: strict JSON transport, domain-separated deterministic CBOR.
+//! Experimental v3: strict JSON transport, domain-separated deterministic CBOR.
 use crate::security::{invalid, MAX_BODY};
 use crate::{Ed25519Signature, Message, Result, SignatureAlgorithm};
 use serde::{Deserialize, Deserializer, Serializer};
 use serde_json::Value;
-pub const ENCODING: &str = "ordavyn-cbor-v2";
-pub const DOMAIN: &[u8] = b"ordavyn:v2:message\0";
+pub const ENCODING: &str = "ordavyn-cbor-v3";
+pub const DOMAIN: &[u8] = b"ordavyn:v3:message\0";
 
 pub fn required_option<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
     d: D,
@@ -91,8 +91,31 @@ fn tree(v: &Value, depth: usize) -> Result<()> {
 }
 pub fn validate(msg: &Message, signing: bool) -> Result<()> {
     tree(&msg.payload, 2)?;
-    if msg.version != 2 || msg.encoding != ENCODING {
+    if msg.version != 3 || msg.encoding != ENCODING {
         return Err(invalid("unsupported wire version or encoding"));
+    }
+    match msg.msg_type {
+        crate::MessageType::Request | crate::MessageType::Event => {
+            if msg.reply_to.is_some() || msg.request_digest.is_some() {
+                return Err(invalid("request cannot contain response binding"));
+            }
+        }
+        _ => {
+            let id = msg
+                .reply_to
+                .as_ref()
+                .ok_or_else(|| invalid("missing reply_to"))?;
+            if id.namespace != "message"
+                || !id.is_valid()
+                || id.value.len() > 256
+                || !msg
+                    .request_digest
+                    .as_ref()
+                    .is_some_and(|d| lower_hex(d, 64))
+            {
+                return Err(invalid("invalid response binding"));
+            }
+        }
     }
     for (id, ns) in [
         (&msg.id, "message"),
@@ -228,4 +251,21 @@ pub(crate) fn check_tokens(bytes: &[u8]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Digest of the full signed request in deterministic CBOR.
+pub fn request_digest(msg: &Message) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    validate(msg, false)?;
+    if msg.msg_type != crate::MessageType::Request || msg.signature.is_none() {
+        return Err(invalid("signed request required for binding"));
+    }
+    let value = serde_json::to_value(msg).map_err(|_| invalid("invalid request"))?;
+    let mut bytes = b"ordavyn:v3:request-binding\0".to_vec();
+    ciborium::ser::into_writer(&cbor(&value)?, &mut bytes)
+        .map_err(|_| invalid("CBOR serialization"))?;
+    Ok(Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
 }
