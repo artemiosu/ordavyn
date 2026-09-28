@@ -4,6 +4,7 @@ import socket
 import threading
 import time
 from .aim import Identifier
+from .journal import JournalError
 from .message import Message, MessageBuilder, MessageType
 from .security import SecurityPolicy, SecurityError, valid_endpoint, MAX_BODY, MAX_HEADERS, TIMEOUT
 from .client import OrdavynClient, PATH_PREFIX, VERSION_HEADER
@@ -13,13 +14,13 @@ from .wire import strict_json, validate_envelope
 
 
 class Ordavyn:
-    def __init__(self, app=None, host='127.0.0.1', port=8080, *, participant=None, replay_capacity=10000):
+    def __init__(self, app=None, host='127.0.0.1', port=8080, *, participant=None, replay_capacity=10000, journal=None):
         if app is not None:
             raise ValueError('Framework app integration is not implemented; use standalone Ordavyn')
         if host not in ('127.0.0.1', 'localhost'):
             raise ValueError('local prototype: loopback only')
         self.host, self.port = host, port
-        self.security = SecurityPolicy(participant or Identifier('participant', 'service'), replay_capacity)
+        self.security = SecurityPolicy(participant or Identifier('participant', 'service'), replay_capacity, journal=journal)
         self._handlers = {}
         self._running = False
         self._server_sock = None
@@ -46,6 +47,7 @@ class Ordavyn:
         msg = copy.deepcopy(msg)
         response = (MessageBuilder(self.security.recipient, msg.from_id)
                     .operation_id(msg.operation_id).subject(msg.subject).epoch(msg.epoch).build())
+        reservation = None
         try:
             validate_envelope(msg.to_dict())
             action = msg.payload.get('action') if isinstance(msg.payload, dict) else None
@@ -57,16 +59,20 @@ class Ordavyn:
             handler = self._handlers.get(path)
             if path != expected or handler is None:
                 raise SecurityError('route mismatch')
-            self.security.authorize_and_reserve(msg, action)
+            reservation = self.security.authorize_and_reserve(msg, action)
             params = dict(msg.payload)
             del params['action']
             result = handler(**params)
             response.msg_type = MessageType.RESPONSE
             response.payload = result if isinstance(result, dict) else {'result': result}
             validate_envelope(response.to_dict())
+            self.security.journal.complete(reservation)
         except Exception as exc:
             response.msg_type = MessageType.ERROR
-            response.payload = {'error': str(exc) if isinstance(exc, SecurityError) else 'handler_or_input_error'}
+            response.payload = {'error': str(exc) if isinstance(exc, (SecurityError, JournalError)) else 'handler_or_input_error'}
+        finally:
+            if reservation is not None:
+                self.security.journal.release(reservation)
         return response
 
     def _handle_connection(self, conn):

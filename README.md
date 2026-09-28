@@ -6,11 +6,13 @@ role-neutral scope remain the design direction; commercial services are optional
 
 The local Rust and Python implementations authenticate requests with Ed25519,
 require explicit local permissions and reserve message/operation IDs before
-handlers run. They use bounded loopback HTTP/1.1 and process-local replay journals.
+handlers run. They use bounded loopback HTTP/1.1, temporary memory journals by
+default, and an optional [persistent local SQLite journal](docs/LOCAL-JOURNAL.md).
+Unknown outcomes require application reconciliation; external effects are not exactly-once.
 
 This is not an approved release, security certification or production service.
 The owner selected Apache-2.0; provenance and attribution review remains open. No real operations, TLS, delegation, negotiation,
-post-quantum cryptography or durable replay storage are implemented.
+or post-quantum cryptography are implemented.
 
 See [implementation guide](implementation/README.md),
 [tutorial](implementation/TUTORIAL.md), [release status](docs/RELEASE-STATUS.md)

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
+exclude = ["**/*.sqlite", "**/*.sqlite3", "**/*.db", "**/*-journal", "**/*-wal", "**/*-shm"]
 authors.workspace = true
 description = "Ordavyn core protocol library — AIM types, CBOR encoding, Ed25519 signing, message envelope"
 
@@ -23,6 +24,8 @@ rand = "0.8"
 thiserror = "1"
 # Async runtime (for transport)
 tokio = { version = "1", features = ["full"] }
+
+rusqlite = { version = "0.38", features = ["bundled"] }
 
 [dev-dependencies]
 # Property testing

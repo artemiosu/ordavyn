@@ -84,10 +84,25 @@ metadata but do not provide an authenticated remote-response channel.
 Unsupported: TLS, delegation, negotiation, post-quantum cryptography, streaming
 transport, CBOR transport decoding and CBOR decoder resource-limit enforcement.
 Rust's CBOR nesting/collection constants are proposed values, not enforced limits.
-Replay protection is process-local and disappears on restart. Passing local tests
+Default memory replay protection disappears on restart. Explicit SQLite storage
+preserves reservations across restarts and SDK changes. Passing local tests
 is not security certification, protocol certification or legal clearance.
 
 Grants are static local configuration; full runtime key revocation is not
 implemented (B4). `stop()` does not cancel a running handler, which may still
 complete its effect (B6). Do not restart while a handler is active: `start()` rejects
 an existing live server thread. Wait for application work to finish before reuse.
+
+
+## Persistent local journal
+
+Provision once with `SQLiteJournal.create(path, recipient, capacity)`. After a
+restart use `SQLiteJournal.open(path, recipient, capacity)`; opening a missing,
+corrupt or mismatched journal fails. Pass the object to
+`Ordavyn(participant=recipient, replay_capacity=capacity, journal=journal)`.
+`MemoryJournal` is the explicitly temporary alternative. `journal.inspect()`
+provides local records; `outcome_unknown` requires application reconciliation and
+`handler_returned` only records a valid normal local return. Both block replay.
+Storage failure never falls back to memory. `stop()` does not close the journal;
+`journal.close()` rejects active handlers. See the
+[shared journal guide](../../docs/LOCAL-JOURNAL.md) for a restart example and limits.

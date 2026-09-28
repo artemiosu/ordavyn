@@ -31,6 +31,16 @@ impl OrdavynServer {
             security: Arc::new(SecurityPolicy::new(recipient, capacity)),
         }
     }
+    pub fn with_journal(
+        recipient: Identifier,
+        capacity: usize,
+        journal: Arc<crate::Journal>,
+    ) -> Result<Self> {
+        Ok(Self {
+            handlers: Arc::new(Mutex::new(HashMap::new())),
+            security: Arc::new(SecurityPolicy::with_journal(recipient, capacity, journal)?),
+        })
+    }
     pub fn trust(
         &self,
         key: Ed25519PublicKey,
@@ -67,7 +77,7 @@ impl OrdavynServer {
             .get(path)
             .cloned()
             .ok_or_else(|| invalid("unknown route"))?;
-        self.security.authorize_and_reserve(msg, action)?;
+        let reservation = self.security.authorize_and_reserve(msg, action)?;
         let mut response = MessageBuilder::new(self.security.recipient.clone(), msg.from.clone())
             .operation_id(msg.operation_id.clone())
             .subject(msg.subject.clone())
@@ -88,6 +98,9 @@ impl OrdavynServer {
             }
         }
         crate::wire::validate(&response, false)?;
+        if response.msg_type == MessageType::Response {
+            reservation.complete()?;
+        }
         Ok(response)
     }
     pub async fn serve(&self, addr: &str) -> Result<()> {

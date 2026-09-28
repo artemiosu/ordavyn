@@ -3,7 +3,7 @@ import pathlib
 import subprocess
 import sys
 
-UNSUPPORTED = ('delegation', 'negotiation', 'post-quantum cryptography', 'TLS', 'durable replay protection', 'streaming transport', 'HTTP/2 streams and concurrent-stream limits', 'CBOR transport decoding', 'CBOR decoder resource-limit enforcement')
+UNSUPPORTED = ('delegation', 'negotiation', 'post-quantum cryptography', 'TLS', 'exactly-once external effects', 'streaming transport', 'HTTP/2 streams and concurrent-stream limits', 'CBOR transport decoding', 'CBOR decoder resource-limit enforcement')
 
 def main():
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -11,6 +11,9 @@ def main():
     for capability in UNSUPPORTED:
         print(f'UNSUPPORTED: {capability}', flush=True)
     result = subprocess.call([sys.executable, '-m', 'pytest', str(root/'python-sdk/tests'), '-q'])
+    if result:
+        return result
+    result = subprocess.call([sys.executable, '-m', 'pytest', str(root/'tests/test_journal_recovery.py'), '-q'])
     if result:
         return result
     return subprocess.call([sys.executable, str(root/'tests/test_interop.py')])

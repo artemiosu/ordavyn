@@ -1,12 +1,13 @@
-"""Local explicit grants and bounded, process-local replay protection.
+"""Local explicit grants and bounded replay protection.
 
-No delegation, expiry negotiation, persistent journal or remote key discovery.
+No delegation, expiry negotiation or remote key discovery.
 """
 import hashlib
 import threading
 from collections.abc import Collection, Mapping
 from .aim import Identifier
 from .message import MessageType
+from .journal import MemoryJournal
 
 MAX_BODY = 65536
 MAX_HEADERS = 8192
@@ -24,14 +25,15 @@ def valid_endpoint(path):
 
 
 class SecurityPolicy:
-    def __init__(self, recipient, capacity=10000):
+    def __init__(self, recipient, capacity=10000, journal=None):
         if not isinstance(recipient, Identifier) or recipient.namespace != 'participant' or type(capacity) is not int or capacity < 1:
             raise ValueError('recipient and positive replay capacity required')
         self.recipient = recipient
         self.capacity = capacity
         self._grants = {}
-        self._messages = set()
-        self._operations = set()
+        self.journal = journal if journal is not None else MemoryJournal(recipient, capacity)
+        if self.journal.recipient != recipient or self.journal.capacity != capacity:
+            raise ValueError("journal binding mismatch")
         self._lock = threading.Lock()
 
     def trust(self, public_key, participant, actions):
@@ -74,11 +76,4 @@ class SecurityPolicy:
                 raise SecurityError('not authorized')
             if not msg.verify_signature(grant[0]):
                 raise SecurityError('invalid signature')
-            message_key = (msg.from_id, msg.id)
-            operation_key = (msg.from_id, msg.operation_id)
-            if message_key in self._messages or operation_key in self._operations:
-                raise SecurityError('replay')
-            if len(self._messages) >= self.capacity:
-                raise SecurityError('replay journal full')
-            self._messages.add(message_key)
-            self._operations.add(operation_key)
+            return self.journal.reserve(msg.from_id, msg.id, msg.operation_id)

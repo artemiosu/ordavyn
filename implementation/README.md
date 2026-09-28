@@ -10,11 +10,20 @@ standalone, role-neutral protocol; the current code implements a small local sub
   its public key to a participant, this server's recipient and allowed actions.
 - Message ID and logical operation ID are atomically reserved before the handler.
   Failed actions stay reserved. Journal capacity defaults to 10,000 requests and
-  fails closed without eviction. Restart clears it; this is not durable exactly-once execution.
+  fails closed without eviction. The default memory mode clears on restart; explicitly
+  selected SQLite persists reservations. Neither provides exactly-once external effects.
 - HTTP header limit 8 KiB, body limit 64 KiB, network deadline 3 seconds.
   Handlers must be short local operations; arbitrary handler execution is not sandboxed.
 - Responses are new unsigned envelopes. Clients validate version, type, recipient
   and operation correlation, but no authenticated remote-response channel is provided.
+
+## Persistent local journal
+
+Rust uses `Journal::create` for exclusive provisioning and `Journal::open` for
+recovery, then `OrdavynServer::with_journal(recipient, capacity, Arc::new(journal))`.
+`Journal::memory` is explicitly temporary. Unknown outcomes require application
+reconciliation; neither failure nor restart allows replay. See the shared
+[local journal guide](../docs/LOCAL-JOURNAL.md) for both SDKs and limitations.
 
 ## Signed formats
 
@@ -47,7 +56,7 @@ python -m build python-sdk
 See [TUTORIAL.md](TUTORIAL.md) for clean-environment installation and demos.
 The conformance runner executes behavioral tests and reports unsupported features
 explicitly; it is not conformance certification. Delegation, negotiation, PQ,
-TLS and durable replay protection are unsupported.
+TLS and exactly-once external effects are unsupported.
 
 The owner selected Apache-2.0 on 2026-09-27; `LICENSE` contains its standard text.
 Rights to inherited material and required attribution still need verification.

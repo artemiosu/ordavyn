@@ -1,7 +1,8 @@
-//! Explicit local grants and atomic process-local replay reservation. No eviction.
+//! Explicit local grants and atomic local replay reservation. No eviction.
+use crate::journal::{Journal, Reservation};
 use crate::{CoreError, Ed25519PublicKey, Identifier, Message, MessageType, Result};
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 pub const MAX_BODY: usize = 65536;
 pub const MAX_HEADERS: usize = 8192;
 pub const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
@@ -12,12 +13,10 @@ struct Grant {
 }
 struct State {
     grants: HashMap<String, Grant>,
-    messages: HashSet<(Identifier, Identifier)>,
-    operations: HashSet<(Identifier, Identifier)>,
 }
 pub struct SecurityPolicy {
     pub recipient: Identifier,
-    capacity: usize,
+    pub journal: Arc<Journal>,
     state: Mutex<State>,
 }
 pub fn invalid(reason: &str) -> CoreError {
@@ -35,15 +34,28 @@ pub fn valid_endpoint(path: &str) -> bool {
 impl SecurityPolicy {
     pub fn new(recipient: Identifier, capacity: usize) -> Self {
         assert!(recipient.namespace == "participant" && recipient.is_valid() && capacity > 0);
-        Self {
-            recipient,
+        Self::with_journal(
+            recipient.clone(),
             capacity,
+            Arc::new(Journal::memory(recipient, capacity).expect("valid journal")),
+        )
+        .expect("valid binding")
+    }
+    pub fn with_journal(
+        recipient: Identifier,
+        capacity: usize,
+        journal: Arc<Journal>,
+    ) -> Result<Self> {
+        if journal.recipient() != &recipient || journal.capacity() != capacity {
+            return Err(invalid("journal binding mismatch"));
+        }
+        Ok(Self {
+            recipient,
+            journal,
             state: Mutex::new(State {
                 grants: HashMap::new(),
-                messages: HashSet::new(),
-                operations: HashSet::new(),
             }),
-        }
+        })
     }
     pub fn trust(
         &self,
@@ -70,7 +82,7 @@ impl SecurityPolicy {
             .insert(key.key_id(), grant);
         Ok(())
     }
-    pub fn authorize_and_reserve(&self, msg: &Message, action: &str) -> Result<()> {
+    pub fn authorize_and_reserve(&self, msg: &Message, action: &str) -> Result<Reservation> {
         crate::wire::validate(msg, false)?;
         if msg.version != 2
             || msg.msg_type != MessageType::Request
@@ -99,7 +111,7 @@ impl SecurityPolicy {
                 return Err(invalid("invalid identifier"));
             }
         }
-        let mut state = self
+        let state = self
             .state
             .lock()
             .map_err(|_| invalid("security state unavailable"))?;
@@ -111,16 +123,6 @@ impl SecurityPolicy {
             return Err(invalid("not authorized"));
         }
         msg.verify_signature(&grant.key)?;
-        let message = (msg.from.clone(), msg.id.clone());
-        let operation = (msg.from.clone(), msg.operation_id.clone());
-        if state.messages.contains(&message) || state.operations.contains(&operation) {
-            return Err(invalid("replay"));
-        }
-        if state.messages.len() >= self.capacity {
-            return Err(invalid("replay journal full"));
-        }
-        state.messages.insert(message);
-        state.operations.insert(operation);
-        Ok(())
+        self.journal.reserve(&msg.from, &msg.id, &msg.operation_id)
     }
 }

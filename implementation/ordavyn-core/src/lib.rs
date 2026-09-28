@@ -19,3 +19,6 @@ pub mod security;
 mod json;
 
 pub mod wire;
+
+pub mod journal;
+pub use journal::{Journal, JournalEntry, Outcome, Reservation};

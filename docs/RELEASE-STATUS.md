@@ -10,9 +10,10 @@ bounded message and operation replay reservation; separate unsigned responses; e
 routes; bounded loopback HTTP/1.1; Ordavyn package and incompatible wire names; repaired
 wheel/sdist contents; simulations using the SDK's protected server.
 
-Limitations: journal state lasts one process and is never evicted; a restart loses
-replay protection. Handler failure does not undo an effect and does not release its
-reservation. Handlers themselves are application code and have no execution timeout.
+Journal storage now has two explicit modes: temporary memory (lost on restart)
+and persistent local SQLite (opt-in, shared by both SDKs). Neither evicts records.
+Handler failure does not undo an effect and does not release its reservation.
+See [LOCAL-JOURNAL.md](LOCAL-JOURNAL.md) for recovery and storage assumptions. Handlers themselves are application code and have no execution timeout.
 Python and Rust now implement a shared experimental local wire v2 envelope and
 domain-separated deterministic CBOR signatures; see [LOCAL-WIRE-V2.md](LOCAL-WIRE-V2.md).
 Version 1 is explicitly incompatible and is rejected. Responses are
@@ -89,3 +90,22 @@ exhaustion, numeric/optional vectors and an exact 65536-byte input in both direc
 а Rust-клиент отклоняет такой статус до разбора тела ошибки. Успешный обмен
 совместим; одинаковая обработка всех ошибок между SDK пока не обеспечена.
 Результаты относятся к локальному прототипу и не разрешают публикацию.
+
+
+Durable replay implementation (2026-09-28): both SDKs can create or open a local
+SQLite journal bound to recipient and capacity. Admission commits before execution;
+normal valid return is recorded separately. Unknown outcomes require application
+reconciliation and cannot be automatically retried. Storage failure denies action
+or denies successful completion reporting; no memory fallback, reset or eviction
+is provided. SQLite storage is local and trusted; device failure and administrator
+file rollback/deletion remain outside the guarantee. This does not establish
+exactly-once external effects or change wire v2, key grants, TLS or publication status.
+Fresh verification evidence is recorded separately from the historical results.
+
+Итог постоянного журнала (2026-09-28): 82 теста Rust и release build прошли.
+Свежие wheel/sdist независимо установлены вне исходной папки: в каждой установке
+прошли 184 теста SDK, 35 проверок восстановления/гонок, живой обмен двух SDK,
+оба демо и пример README. Примеры нового руководства также выполнены.
+Три направления BMAD-ревью завершены; все принятые замечания исправлены и
+проверены полным прогоном. Новых отложенных замечаний этого этапа нет.
+Ранее перечисленные ограничения и условия публикации остаются в силе.

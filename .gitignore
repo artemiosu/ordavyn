@@ -21,3 +21,11 @@
 *.bundle
 
 .*-private/
+
+# Local replay journals and SQLite sidecars (never publish application state).
+*.sqlite
+*.sqlite3
+*.db
+*-journal
+*-wal
+*-shm
