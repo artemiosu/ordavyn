@@ -30,6 +30,17 @@ class Ordavyn:
         self.security.trust(public_key, participant, actions)
         return self
 
+    def revoke(self, public_key):
+        return self.security.revoke(public_key)
+
+    def rotate_key(self, old_key, new_key):
+        self.security.rotate_key(old_key, new_key)
+        return self
+
+    def resume(self):
+        self.security.resume()
+        return self
+
     def expose(self, path, consequential=False):
         # Every action requires signature and explicit permission, including reads.
         if not valid_endpoint(path):
@@ -47,7 +58,7 @@ class Ordavyn:
         msg = copy.deepcopy(msg)
         response = (MessageBuilder(self.security.recipient, msg.from_id)
                     .operation_id(msg.operation_id).subject(msg.subject).epoch(msg.epoch).build())
-        reservation = None
+        reservation = object()
         try:
             validate_envelope(msg.to_dict())
             action = msg.payload.get('action') if isinstance(msg.payload, dict) else None
@@ -59,7 +70,7 @@ class Ordavyn:
             handler = self._handlers.get(path)
             if path != expected or handler is None:
                 raise SecurityError('route mismatch')
-            reservation = self.security.authorize_and_reserve(msg, action)
+            self.security.authorize_and_reserve(msg, action, reservation)
             params = dict(msg.payload)
             del params['action']
             result = handler(**params)
@@ -71,11 +82,16 @@ class Ordavyn:
             response.msg_type = MessageType.ERROR
             response.payload = {'error': str(exc) if isinstance(exc, (SecurityError, JournalError)) else 'handler_or_input_error'}
         finally:
-            if reservation is not None:
-                self.security.journal.release(reservation)
+            self.security.finish(reservation)
         return response
 
     def _handle_connection(self, conn):
+        try:
+            self._process_connection(conn)
+        finally:
+            conn.close()
+
+    def _process_connection(self, conn):
         deadline = time.monotonic() + TIMEOUT
         def receive(size):
             remaining = deadline - time.monotonic()
@@ -141,35 +157,84 @@ class Ordavyn:
             conn.close()
 
     def start(self):
-        if self._running or (self._server_thread is not None and self._server_thread.is_alive()):
-            raise RuntimeError('server or handler still running')
-        sock = socket.socket()
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((self.host, self.port))
-        sock.listen(16)
-        sock.settimeout(0.1)
-        self.port = sock.getsockname()[1]
-        self._server_sock = sock
-        self._running = True
-        def run():
-            while self._running:
-                try:
-                    conn, _ = sock.accept()
-                    self._handle_connection(conn)
-                except socket.timeout:
-                    continue
-                except OSError:
-                    break
-        self._server_thread = threading.Thread(target=run, daemon=True)
-        self._server_thread.start()
+        with self.security._condition:
+            if self._running or self.security._network or (self._server_thread is not None and self._server_thread.is_alive()):
+                raise RuntimeError('server or handler still running')
+            if not self.security._accepting and self.security._active:
+                raise RuntimeError('handler still running')
+            sock = socket.socket()
+            owned = False
+            thread = None
+            def release_listener():
+                nonlocal owned
+                with self.security._condition:
+                    if owned:
+                        owned = False
+                        self.security._network -= 1
+                    if self._server_sock is sock:
+                        self._running = False
+                        self._server_sock = None
+                    self.security._condition.notify_all()
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind((self.host, self.port))
+                sock.listen(16)
+                sock.settimeout(0.1)
+                self.port = sock.getsockname()[1]
+                self._server_sock = sock
+                self._running = True
+                self.security._network += 1
+                owned = True
+                def run():
+                    try:
+                        while True:
+                            with self.security._lock:
+                                if not self._running:
+                                    break
+                            try:
+                                conn, _ = sock.accept()
+                                self._handle_connection(conn)
+                            except socket.timeout:
+                                continue
+                            except OSError:
+                                break
+                    finally:
+                        sock.close()
+                        release_listener()
+                thread = threading.Thread(target=run, daemon=True)
+                self._server_thread = thread
+                self._server_thread.start()
+                self.security._accepting = True
+            except BaseException:
+                sock.close()
+                self.security.request_stop()
+                self._running = False
+                # Thread.start may raise after launching. Its worker still owns
+                # cleanup, and stop must retain the handle until it has exited.
+                if thread is None or thread.ident is None:
+                    release_listener()
+                    self._server_thread = None
+                raise
         return self
 
-    def stop(self):
-        self._running = False
-        if self._server_sock:
-            self._server_sock.close()
-        if self._server_thread:
-            self._server_thread.join(TIMEOUT + 1)
+    def request_stop(self):
+        with self.security._condition:
+            self.security.request_stop()
+            self._running = False
+            if self._server_sock:
+                self._server_sock.close()
+
+    def stop(self, timeout=4.0):
+        self.security.validate_timeout(timeout)
+        self.request_stop()
+        deadline = time.monotonic() + timeout
+        if not self.security.wait_stopped(timeout):
+            return False
+        thread = self._server_thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(max(0.0, deadline - time.monotonic()))
+            return not thread.is_alive()
+        return thread is None or not thread.is_alive()
 
     def client(self, keypair=None):
         client = OrdavynClient(self.host, self.port)

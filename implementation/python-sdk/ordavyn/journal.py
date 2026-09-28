@@ -70,14 +70,14 @@ class MemoryJournal:
         if self._closed:
             raise JournalError('journal closed')
 
-    def reserve(self, sender, message, operation):
+    def reserve(self, sender, message, operation, *, _reservation=None):
         key = (identifier_blob(sender), identifier_blob(message), identifier_blob(operation))
         for blob, namespace in zip(key, ('participant', 'message', 'logical-operation')):
             _decode(blob, namespace)
         with self._lock:
             self._ready()
             self._reserve(key)
-            reservation = object()
+            reservation = object() if _reservation is None else _reservation
             self._active[reservation] = key
         return reservation
 
@@ -102,10 +102,12 @@ class MemoryJournal:
             raise JournalError('reservation missing or already completed')
         self._rows[key] = 'handler_returned'
 
-    def release(self, reservation):
+    def release(self, reservation, *, _missing_ok=False):
         """End local handler ownership; never delete the replay reservation."""
         with self._lock:
             if reservation not in self._active:
+                if _missing_ok:
+                    return
                 raise JournalError('not an active reservation')
             del self._active[reservation]
 

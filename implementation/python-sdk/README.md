@@ -88,10 +88,13 @@ Default memory replay protection disappears on restart. Explicit SQLite storage
 preserves reservations across restarts and SDK changes. Passing local tests
 is not security certification, protocol certification or legal clearance.
 
-Grants are static local configuration; full runtime key revocation is not
-implemented (B4). `stop()` does not cancel a running handler, which may still
-complete its effect (B6). Do not restart while a handler is active: `start()` rejects
-an existing live server thread. Wait for application work to finish before reuse.
+Local grants can be narrowed with `trust`, removed with `revoke(public_key)`, or
+moved atomically with `rotate_key(old_key, new_key)`. `request_stop()` closes all
+admission, including direct calls. `stop(timeout=4.0)` returns whether handlers and
+network work finished; a timeout does not cancel a handler. `resume()` or `start()`
+reopens admission only after completion. Grants and replay protection survive
+stop/resume. See [local lifecycle](../../docs/LOCAL-LIFECYCLE.md) for examples and
+restart rules.
 
 
 ## Persistent local journal

@@ -8,6 +8,8 @@ The local Rust and Python implementations authenticate requests with Ed25519,
 require explicit local permissions and reserve message/operation IDs before
 handlers run. They use bounded loopback HTTP/1.1, temporary memory journals by
 default, and an optional [persistent local SQLite journal](docs/LOCAL-JOURNAL.md).
+Local [admission controls](docs/LOCAL-LIFECYCLE.md) support key revocation, rotation
+and bounded shutdown without clearing replay protection.
 Unknown outcomes require application reconciliation; external effects are not exactly-once.
 
 This is not an approved release, security certification or production service.

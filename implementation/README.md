@@ -68,3 +68,12 @@ transport are unsupported. Rust CBOR depth/collection constants are proposed
 values only; they are not enforced decoder limits and their values do not prove
 resource protection. The implemented HTTP JSON byte limits are separate.
 HTTP/2 streams and concurrent-stream limits are also unsupported.
+
+
+## Local admission lifecycle
+
+Both SDKs support explicit permission updates, key revocation and atomic key
+rotation. Stop closes direct and HTTP admission and waits for current work with a
+bounded timeout; resume preserves permissions and replay barriers. A timeout does
+not cancel an admitted handler. See the [local lifecycle guide](../docs/LOCAL-LIFECYCLE.md)
+for Python/Rust methods, examples and process-restart boundaries.

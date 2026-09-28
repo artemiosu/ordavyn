@@ -44,7 +44,7 @@ and review. Earlier AD-15/AD-16 release conditions are not declared satisfied by
 work. The license selection and explicit owner publication approval do not replace
 these checks; no legal determination is made here.
 
-Deferred limitations B4/B6: grants are static local configuration, not a complete
+Historical deferred limitations B4/B6 (superseded by the local admission work below): grants are static local configuration, not a complete
 runtime key-revocation mechanism. Stopping the Python server closes its listener
 but does not cancel an already running handler; that handler may still finish its
 effect. Do not restart while a handler is active; start rejects an existing live
@@ -109,3 +109,29 @@ Fresh verification evidence is recorded separately from the historical results.
 Три направления BMAD-ревью завершены; все принятые замечания исправлены и
 проверены полным прогоном. Новых отложенных замечаний этого этапа нет.
 Ранее перечисленные ограничения и условия публикации остаются в силе.
+
+
+Local admission control (2026-09-28): both SDKs now support atomic local key
+revocation, permission replacement and key rotation. Direct and HTTP calls share
+a closed/open admission gate; stop waits for handlers and network work with a
+bounded timeout, and explicit resume requires completion. Rust clones share this
+state; HTTP handlers run in a bounded blocking worker even on a current-thread
+runtime. Cancellation of a serve future retains accounting for unfinished work.
+Grants, revocations and journal barriers survive stop/resume of the same object;
+new processes require current application-provided grants. Keys and permissions
+are not persisted in the journal. Wire v2, SQLite schema and pre-push are unchanged.
+
+This supersedes historical B4/B6 as descriptions of missing local admission
+controls. An already admitted handler may still finish its effect: forced
+cancellation is intentionally unsupported. Distributed revocation, TLS and public
+release approval remain outside scope. See [LOCAL-LIFECYCLE.md](LOCAL-LIFECYCLE.md).
+Fresh verification evidence follows separately; all historical results above are
+retained and are not new test claims.
+
+Итог управляемого допуска (2026-09-28): 92 теста Rust и release build прошли.
+В независимых чистых установках wheel и sdist прошли по 244 теста Python и
+35 проверок восстановления; живой обмен между SDK, демо и примеры руководств
+выполнены. Три направления BMAD-ревью завершены, принятые замечания исправлены
+и проверены. Новых отложенных дефектов нет; прежние ограничения остаются.
+Таймаут stop ограничивает ожидание после закрытия допуска, а само закрытие
+может ожидать текущую ограниченную операцию журнала. Публикация не разрешена.

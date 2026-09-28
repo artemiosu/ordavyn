@@ -110,8 +110,9 @@ as a transport error, including a Python handler-error response.
 The journal is bounded and never evicts. Its default memory mode loses replay
 protection on restart; the optional [local SQLite adapter](LOCAL-JOURNAL.md)
 preserves reservations without changing wire v2. Unknown outcomes need application
-reconciliation; no exactly-once external effect is promised. TLS, key revocation, signed
-responses, real operations, delegation and negotiation remain outside this stage.
+reconciliation; no exactly-once external effect is promised. Local [revocation, rotation and admission stopping](LOCAL-LIFECYCLE.md) use SDK
+management methods and add no wire fields or HTTP management routes. TLS, signed
+responses, real operations, delegation and negotiation remain unsupported.
 Handlers have no execution timeout. No publication, pre-push change, private-source
 import or public-network operation is authorized by this implementation.
 

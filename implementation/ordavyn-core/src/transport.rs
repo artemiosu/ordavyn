@@ -49,6 +49,22 @@ impl OrdavynServer {
     ) -> Result<()> {
         self.security.trust(key, participant, actions)
     }
+    pub fn revoke(&self, key: &Ed25519PublicKey) -> Result<bool> {
+        self.security.revoke(key)
+    }
+    pub fn rotate_key(&self, old: &Ed25519PublicKey, new: Ed25519PublicKey) -> Result<()> {
+        self.security.rotate_key(old, new)
+    }
+    pub fn request_stop(&self) {
+        self.security.request_stop();
+    }
+    /// A timeout does not cancel an admitted handler. Call again to await completion.
+    pub async fn stop(&self, timeout: std::time::Duration) -> bool {
+        self.security.stop(timeout).await
+    }
+    pub fn resume(&self) -> Result<()> {
+        self.security.resume()
+    }
     pub fn handle<F>(&self, path: &str, handler: F)
     where
         F: Fn(Message) -> Message + Send + Sync + 'static,
@@ -104,21 +120,34 @@ impl OrdavynServer {
         Ok(response)
     }
     pub async fn serve(&self, addr: &str) -> Result<()> {
+        let work = self.security.begin_listener()?;
         let listener = local_listener(addr).await?;
+        self.security.open_listener(&work)?;
         loop {
-            let (mut socket, _) = listener
-                .accept()
-                .await
-                .map_err(|_| invalid("accept failed"))?;
-            // Sequential and bounded: no unbounded task allocation on incoming connections.
-            let _ = tokio::time::timeout(TIMEOUT, self.connection(&mut socket)).await;
+            tokio::select! {
+                biased;
+                _ = self.security.stopped() => return Ok(()),
+                result = listener.accept() => {
+                    let (mut socket, _) = result.map_err(|_| invalid("accept failed"))?;
+                    // Await one worker before accepting another connection. Cancellation
+                    // leaves its independent accounting alive until the worker exits.
+                    tokio::select! {
+                        biased;
+                        _ = self.security.stopped() => return Ok(()),
+                        _ = self.connection(&mut socket, tokio::time::Instant::now() + TIMEOUT) => {}
+                    }
+                }
+            }
         }
     }
     pub async fn serve_one(&self, addr: &str) -> Result<()> {
+        let work = self.security.begin_listener()?;
         let listener = local_listener(addr).await?;
-        self.serve_listener_one(listener).await
+        self.security.open_listener(&work)?;
+        self.listener_one(listener).await
     }
     pub async fn serve_listener_one(&self, listener: TcpListener) -> Result<()> {
+        let work = self.security.begin_listener()?;
         if !listener
             .local_addr()
             .map_err(|_| invalid("listener address"))?
@@ -127,26 +156,49 @@ impl OrdavynServer {
         {
             return Err(invalid("loopback only"));
         }
-        tokio::time::timeout(TIMEOUT, async {
-            let (mut socket, _) = listener
-                .accept()
-                .await
-                .map_err(|_| invalid("accept failed"))?;
-            self.connection(&mut socket).await
-        })
-        .await
-        .map_err(|_| invalid("HTTP deadline"))?
+        self.security.open_listener(&work)?;
+        self.listener_one(listener).await
     }
-    async fn connection(&self, socket: &mut TcpStream) -> Result<()> {
+    async fn listener_one(&self, listener: TcpListener) -> Result<()> {
+        let deadline = tokio::time::Instant::now() + TIMEOUT;
+        tokio::select! {
+            biased;
+            _ = self.security.stopped() => Ok(()),
+            result = async {
+                let (mut socket, _) = tokio::time::timeout_at(deadline, listener.accept())
+                    .await.map_err(|_| invalid("HTTP deadline"))?
+                    .map_err(|_| invalid("accept failed"))?;
+                self.connection(&mut socket, deadline).await
+            } => result
+        }
+    }
+    async fn connection(
+        &self,
+        socket: &mut TcpStream,
+        deadline: tokio::time::Instant,
+    ) -> Result<()> {
+        // A network deadline closes the connection without a fresh error-write
+        // interval. The I/O deadline does not cancel the sole dispatch worker:
+        // awaiting it retains this connection until completion or stop/cancellation.
+        // Independent worker accounting remains alive after network cancellation.
+        let input = tokio::time::timeout_at(deadline, read_http(socket))
+            .await
+            .map_err(|_| invalid("HTTP deadline"))?;
         let result: Result<Vec<u8>> = async {
-            let (line, headers, body) = read_http(socket).await?;
+            let (line, headers, body) = input?;
             let parts: Vec<_> = line.split(' ').collect();
             if parts.len() != 3 || parts[0] != "POST" || parts[2] != "HTTP/1.1" {
                 return Err(invalid("invalid request line"));
             }
             check_headers(&headers)?;
             let msg: Message = crate::json::message(&body)?;
-            let mut response = self.dispatch(parts[1], &msg)?;
+            let path = parts[1].to_owned();
+            let server = self.clone();
+            let work = self.security.begin_worker()?;
+            let mut response = tokio::task::spawn_blocking(move || {
+                let _work = work;
+                server.dispatch(&path, &msg)
+            }).await.map_err(|_| invalid("dispatch worker failed"))??;
             // Dispatch already validated the model. Only the actual JSON byte
             // budget can fail here; retain correlation and the replay reservation.
             let bytes = serde_json::to_vec(&response).map_err(|_| invalid("invalid response"))?;
@@ -158,11 +210,16 @@ impl OrdavynServer {
             Ok(bytes)
         }
         .await;
+        if tokio::time::Instant::now() >= deadline {
+            return Err(invalid("HTTP deadline"));
+        }
         let (status, body) = match result {
             Ok(body) => (200, body),
             Err(_) => (403, b"{\"error\":\"request rejected\"}".to_vec()),
         };
-        write_http(socket, status, &body).await
+        tokio::time::timeout_at(deadline, write_http(socket, status, &body))
+            .await
+            .map_err(|_| invalid("HTTP deadline"))?
     }
 }
 async fn local_listener(addr: &str) -> Result<TcpListener> {
@@ -330,5 +387,120 @@ impl OrdavynClient {
             return Err(invalid("invalid response envelope"));
         }
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use std::sync::{Condvar, Mutex};
+    use std::time::Duration;
+
+    struct PoolGate {
+        open: Mutex<bool>,
+        changed: Condvar,
+    }
+    impl PoolGate {
+        fn release(&self) {
+            *self.open.lock().unwrap() = true;
+            self.changed.notify_all();
+        }
+    }
+    struct ReleaseOnDrop(Arc<PoolGate>);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            self.0.release();
+        }
+    }
+
+    #[test]
+    fn cancelled_serve_keeps_queued_worker_owned() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let gate = Arc::new(PoolGate {
+                open: Mutex::new(false),
+                changed: Condvar::new(),
+            });
+            let _release_on_exit = ReleaseOnDrop(gate.clone());
+            let (occupied_tx, occupied_rx) = tokio::sync::oneshot::channel();
+            let worker_gate = gate.clone();
+            let occupied = tokio::task::spawn_blocking(move || {
+                occupied_tx.send(()).unwrap();
+                let open = worker_gate.open.lock().unwrap();
+                let (open, _) = worker_gate
+                    .changed
+                    .wait_timeout_while(open, Duration::from_secs(5), |v| !*v)
+                    .unwrap();
+                assert!(*open, "blocking pool release deadline");
+            });
+            tokio::time::timeout(Duration::from_secs(3), occupied_rx)
+                .await
+                .unwrap()
+                .unwrap();
+            let server = OrdavynServer::new();
+            let key = crate::Ed25519Keypair::generate();
+            server
+                .trust(
+                    key.public_key(),
+                    Identifier::new("participant", "caller"),
+                    &["act"],
+                )
+                .unwrap();
+            server.handle("/ordavyn/v2/act", |_| {
+                panic!("stopped queued work was admitted")
+            });
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let clone = server.clone();
+            let serving = tokio::spawn(async move { clone.serve_listener_one(listener).await });
+            let mut request = MessageBuilder::new(
+                Identifier::new("participant", "caller"),
+                Identifier::new("participant", "service"),
+            )
+            .payload(serde_json::json!({"action":"act"}))
+            .build();
+            request.sign(&key).unwrap();
+            let client = tokio::spawn(async move {
+                OrdavynClient::new(&format!("http://{address}"))
+                    .send("/act", &request)
+                    .await
+            });
+            // The only blocking thread is held above. Two owned network units
+            // prove the listener parsed the request and queued its worker.
+            tokio::time::timeout(Duration::from_secs(3), async {
+                while server.security.network_work_count() != 2 {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            serving.abort();
+            assert!(tokio::time::timeout(Duration::from_secs(3), serving)
+                .await
+                .unwrap()
+                .unwrap_err()
+                .is_cancelled());
+            assert_eq!(server.security.network_work_count(), 1);
+            assert!(!server.stop(Duration::ZERO).await);
+            assert!(server.resume().is_err());
+            assert!(server.serve_one("127.0.0.1:0").await.is_err());
+            assert!(server.security.journal.inspect().unwrap().is_empty());
+            gate.release();
+            tokio::time::timeout(Duration::from_secs(3), occupied)
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(server.stop(Duration::from_secs(3)).await);
+            assert_eq!(server.security.network_work_count(), 0);
+            assert!(server.security.journal.inspect().unwrap().is_empty());
+            server.resume().unwrap();
+            let _ = tokio::time::timeout(Duration::from_secs(3), client)
+                .await
+                .unwrap();
+        });
     }
 }

@@ -100,5 +100,9 @@ SQLite (`libsqlite3-sys` 0.36.0), recorded in Cargo.lock.
 
 The application must reconcile uncertain outcomes against its own source of truth.
 This is a persistent admission barrier, not exactly-once execution of external
-systems. There is no runtime key revocation, TLS, production approval or publication
-authorization implied by this feature.
+systems. Local [key revocation and bounded stopping](LOCAL-LIFECYCLE.md) preserve these
+barriers. Keys and permissions are never stored in this journal; after a process
+restart the application loads current grants separately. Stop/resume of the same
+server retains its grants and replay records. Neither closes the journal; wait for
+a completed stop before closing it. No TLS, production approval or publication
+authorization is implied by these features.
