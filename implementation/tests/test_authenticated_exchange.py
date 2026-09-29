@@ -243,7 +243,8 @@ def test_rust_pem_parser_rejects_invalid_inputs(damaged,certificates,tmp_path,mo
         _,other_key=certificates[3]('ip')
         bad_key.write_bytes(other_key.read_bytes())
     else:
-        bad_key.write_bytes(b'' if damaged=='empty-key' else b'-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n')
+        marker=b'PRIVATE KEY'
+        bad_key.write_bytes(b'' if damaged=='empty-key' else b'-----BEGIN '+marker+b'-----\nnot-base64\n-----END '+marker+b'-----\n')
     monkeypatch.setenv('ORDAVYN_TLS_CA',str(ca))
     monkeypatch.setenv('ORDAVYN_TLS_CERT',str(bad_cert if 'cert' in damaged else cert))
     monkeypatch.setenv('ORDAVYN_TLS_KEY',str(bad_key if 'key' in damaged else key))

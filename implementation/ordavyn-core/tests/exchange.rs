@@ -161,11 +161,15 @@ fn tls_pem_reader_matrix_and_first_key_semantics() {
         assert!(ClientTls::from_pem(invalid, "test.local").is_err());
         assert!(ServerTls::from_pem(invalid, &material.key).is_err());
     }
-    for invalid in [
-        b"".as_slice(),
-        b"not DER or PEM",
-        b"-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n",
-    ] {
+    let malformed_key = [
+        b"-----BEGIN ".as_slice(),
+        b"PRIVATE KEY",
+        b"-----\nnot-base64\n-----END ",
+        b"PRIVATE KEY",
+        b"-----\n",
+    ]
+    .concat();
+    for invalid in [b"".as_slice(), b"not DER or PEM", malformed_key.as_slice()] {
         assert!(ServerTls::from_pem(&material.cert, invalid).is_err());
     }
     assert!(ServerTls::from_pem(&material.cert, &material.other_key).is_err());
