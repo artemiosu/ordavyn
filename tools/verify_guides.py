@@ -30,11 +30,26 @@ CODEQL = "github/codeql-action/{action}@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
 RUST_FETCH = "cargo +1.98.1 fetch --manifest-path implementation/Cargo.toml --locked --target x86_64-unknown-linux-gnu"
 RUST_EXAMPLES = "cargo +1.98.1 build --manifest-path implementation/Cargo.toml --examples --locked --offline"
 PYTHON_INTEROP = "python -m pytest -q implementation/python-sdk/tests implementation/tests"
+RUSTFMT_SETUP = "rustup component add rustfmt --toolchain 1.98.1"
+RUST_FORMAT = "cargo +1.98.1 fmt --manifest-path implementation/Cargo.toml --all --check"
 OFFLINE_RUST_COMMANDS = (
     "python -m unittest discover -s tools/tests -v",
     "cargo +1.98.1 test --manifest-path implementation/Cargo.toml --locked --offline",
     "python tools/verify_guides.py --root .",
 )
+EXPECTED_CI_STEPS = [
+    {"uses": CHECKOUT, "with": {"persist-credentials": False}},
+    {"uses": SETUP_PYTHON, "with": {"python-version": "3.13.15"}},
+    {"name": "Install locked verification dependencies", "run": "python -m pip install --require-hashes -r release/verification-requirements.txt"},
+    {"name": "Install pinned rustfmt", "run": RUSTFMT_SETUP},
+    {"name": "Fetch locked Rust dependencies", "run": RUST_FETCH},
+    {"name": "Build locked Rust examples", "run": RUST_EXAMPLES},
+    {"name": "Repository checks", "run": "python -m unittest discover -s tools/tests -v"},
+    {"name": "Guide and GitHub package checks", "run": "python tools/verify_guides.py --root ."},
+    {"name": "Python and interoperability tests", "run": PYTHON_INTEROP},
+    {"name": "Rust format", "run": RUST_FORMAT},
+    {"name": "Rust tests", "run": "cargo +1.98.1 test --manifest-path implementation/Cargo.toml --locked --offline"},
+]
 
 
 def _fail(path, field, value):
@@ -129,6 +144,14 @@ def _verify_workflow(root, relative):
                 "locked offline Rust examples build order",
                 {"warm-up": warmups[0], "examples": example_builds[0], "python interoperability": python_interop},
             )
+        rustfmt_setup = [index for index, step in enumerate(steps) if step.get("run") == RUSTFMT_SETUP]
+        rust_format = [index for index, step in enumerate(steps) if step.get("run") == RUST_FORMAT]
+        if len(rustfmt_setup) != 1:
+            _fail(relative, "pinned rustfmt setup", rustfmt_setup)
+        if len(rust_format) != 1 or rustfmt_setup[0] >= rust_format[0]:
+            _fail(relative, "pinned rustfmt setup order", {"setup": rustfmt_setup[0], "format": rust_format})
+        if steps != EXPECTED_CI_STEPS:
+            _fail(relative, "reviewed CI steps", steps)
 
 
 def _verify_issue_forms(root):
