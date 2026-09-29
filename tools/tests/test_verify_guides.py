@@ -1,13 +1,16 @@
 import json
+import importlib.util
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
 
-from tools.verify_guides import REQUIRED_GITHUB_FILES, verify_github_package
-
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location("verify_guides", PROJECT_ROOT / "tools/verify_guides.py")
+VERIFY_GUIDES = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(VERIFY_GUIDES)
+REQUIRED_GITHUB_FILES = VERIFY_GUIDES.REQUIRED_GITHUB_FILES
+verify_github_package = VERIFY_GUIDES.verify_github_package
 
 
 class GithubPackageTests(unittest.TestCase):
