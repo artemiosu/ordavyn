@@ -87,8 +87,9 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(env['PYTEST_DISABLE_PLUGIN_AUTOLOAD'],'1')
 
     def test_suite_counts_fail_closed(self):
-        self.assertEqual(runner.suite_summary(['python','test_conformance.py'],'249 passed\n154 passed')['passed'],[249,154])
-        for text in ('1 passed','249 passed\n154 passed, 1 deselected','249 passed\n153 passed, 1 skipped'):
+        self.assertEqual(runner.suite_summary(['python','test_conformance.py'],'249 passed\n159 passed')['passed'],[249,159])
+        self.assertEqual(runner.suite_summary(['cargo','test'],'test result: ok. 97 passed; 0 failed; 0 ignored')['passed'],97)
+        for text in ('1 passed','249 passed\n159 passed, 1 deselected','249 passed\n158 passed, 1 skipped'):
             with self.assertRaises(rc.Rejected):runner.suite_summary(['python','test_conformance.py'],text)
         with self.assertRaises(rc.Rejected):runner.suite_summary(['python','-m','unittest'],'Ran 0 tests\n\nOK\n')
         with self.assertRaises(rc.Rejected):runner.suite_summary(['cargo','test'],'test result: ok. 95 passed; 0 failed; 1 ignored')
@@ -102,13 +103,74 @@ class EvidenceTests(unittest.TestCase):
                     text='```toml\n[advisory]\nid="'+ident+'"\npackage="demo"\n'+('withdrawn="2026-01-01"\n' if withdrawn else '')+'[versions]\npatched=["'+expr+'"]\n```\n'
                     data=text.encode();item=tarfile.TarInfo('db/crates/demo/'+ident+'.md');item.size=len(data);archive.addfile(item,io.BytesIO(data))
                 data=b'```toml\ninvalid = [\n```';item=tarfile.TarInfo('db/crates/demo/broken.md');item.size=len(data);archive.addfile(item,io.BytesIO(data))
-            result=audit.rustsec_matches({'package':[{'name':'demo','version':'1.2.2'},{'name':'demo','version':'1.2.3'}]},path)
+            project=Path(__file__).parents[2]
+            subprocess.run(['cargo','+1.98.1','build','--locked','--offline','--example','audit_semver'],cwd=project/'implementation',check=True)
+            helper=project/'implementation/target/debug/examples/audit_semver'
+            result=audit.rustsec_matches({'package':[{'name':'demo','version':'1.2.2'},{'name':'demo','version':'1.2.3'}]},path,helper)
             statuses={(e.get('id'),e.get('version')):e['status'] for e in result}
             self.assertEqual(statuses['fixed','1.2.2'],'BLOCKER');self.assertEqual(statuses['fixed','1.2.3'],'NOT_AFFECTED')
-            for ident in ('partial','prerelease','build','partial_equal','caret_zero'):
-                self.assertEqual(statuses[ident,'1.2.3'],'UNKNOWN')
+            for ident in ('prerelease','build','partial_equal'):
+                self.assertEqual(statuses[ident,'1.2.3'],'NOT_AFFECTED')
+            self.assertEqual(statuses['partial','1.2.3'],'BLOCKER')
+            self.assertEqual(statuses['caret_zero','1.2.3'],'BLOCKER')
             self.assertEqual(statuses['withdrawn','1.2.2'],'WITHDRAWN')
             self.assertTrue(any(e.get('path','').endswith('broken.md') and e['status']=='UNKNOWN' for e in result))
+
+            tampered=Path(temp)/'tampered-helper';shutil.copyfile(helper,tampered);tampered.chmod(0o755)
+            tampered.write_bytes(b'not executable evidence')
+            unknown=audit.rustsec_matches({'package':[{'name':'demo','version':'1.2.3'}]},path,tampered)
+            self.assertTrue(all(e['status'] in ('UNKNOWN','WITHDRAWN') for e in unknown))
+
+    def test_audit_builds_fresh_locked_semver_helper(self):
+        project=Path(__file__).parents[2]
+        with tempfile.TemporaryDirectory() as temp:
+            helper,evidence=audit.prepare_semver_helper(project,Path(temp))
+            self.assertTrue(helper.is_file())
+            self.assertEqual(evidence['sha256'],rc.sha(helper.read_bytes()))
+            self.assertTrue(evidence['archives'] and evidence['extracted_source_sha256'])
+            self.assertEqual(audit.semver_matches(helper,[{'version':'1.2.3','requirements':['>=1.2','<1.2']}]),[[True,False]])
+            helper.write_bytes(b'substituted')
+            self.assertEqual(audit.semver_matches(helper,[{'version':'1.2.3','requirements':['>=1.2']}]),[None])
+
+    def test_verifier_rejects_mismatched_helper_binary_hash(self):
+        with tempfile.TemporaryDirectory() as temp:
+            helper=Path(temp)/'helper';helper.write_bytes(b'actual');helper.chmod(0o755)
+            with self.assertRaisesRegex(rc.Rejected,'binary mismatch'):
+                runner.verify_helper_binary(helper,{'semver_helper_sha256':rc.sha(b'other')})
+
+    def test_helper_build_ignores_forged_host_registry_source_and_requires_archive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base=Path(temp);root=base/'root';output=base/'output';host=base/'host'
+            (root/'implementation').mkdir(parents=True);output.mkdir();cache=host/'.cargo/registry/cache/index';cache.mkdir(parents=True)
+            forged=host/'.cargo/registry/src/index/semver-1.0.28';forged.mkdir(parents=True)
+            (forged/'src.rs').write_bytes(b'forged self-consistent source')
+            archive=cache/'semver-1.0.28.crate';archive.write_bytes(b'verified archive bytes')
+            lock={'package':[{'name':'semver','version':'1.0.28','source':'registry+https://github.com/rust-lang/crates.io-index','checksum':rc.sha(archive.read_bytes())}]}
+            def build(args,cwd,env,**kwargs):
+                copied=list((Path(env['CARGO_HOME'])/'registry/cache').glob('*/*.crate'))
+                if not copied: raise subprocess.CalledProcessError(101,args)
+                helper=Path(env['CARGO_TARGET_DIR'])/'debug/examples/audit_semver';helper.parent.mkdir(parents=True);helper.write_text('#!/bin/sh\nprintf \'[{"matches":[true,false]}]\\n\'\n');helper.chmod(0o755)
+                source=Path(env['CARGO_HOME'])/'registry/src/index/semver-1.0.28';source.mkdir(parents=True);(source/'src.rs').write_bytes(b'from verified archive')
+                return subprocess.CompletedProcess(args,0)
+            with patch.object(audit.Path,'home',return_value=host),patch.object(audit.subprocess,'run',side_effect=build),patch.object(audit,'semver_matches',return_value=[[True,False]]):
+                helper,evidence=audit.prepare_semver_helper(root,output,lock)
+            self.assertTrue(helper.is_file())
+            forged_digest=rc.sha(json.dumps([('src.rs',rc.sha(b'forged self-consistent source'))],separators=(',',':')).encode())
+            self.assertNotEqual(evidence['extracted_source_sha256']['semver-1.0.28'],forged_digest)
+            archive.unlink();empty=base/'empty';empty.mkdir()
+            with patch.object(audit.Path,'home',return_value=host),patch.object(audit.subprocess,'run',side_effect=build),patch.object(audit,'semver_matches',return_value=[[True,False]]):
+                with self.assertRaises(subprocess.CalledProcessError):audit.prepare_semver_helper(root,empty,lock)
+            rows=audit.rustsec_matches({'package':[{'name':'demo','version':'1.0.0'}]},self._advisory_archive(base),None)
+            self.assertTrue(all(row['status'] in ('UNKNOWN','WITHDRAWN') for row in rows))
+
+    @staticmethod
+    def _advisory_archive(base):
+        path=base/'missing-helper-advisories.tar.gz'
+        with tarfile.open(path,'w:gz') as archive:
+            for ident,withdrawn in (('active',False),('withdrawn',True)):
+                text='```toml\n[advisory]\nid="'+ident+'"\npackage="demo"\n'+('withdrawn="2026-01-01"\n' if withdrawn else '')+'[versions]\npatched=[">=2"]\n```\n'
+                data=text.encode();item=tarfile.TarInfo('db/crates/demo/'+ident+'.md');item.size=len(data);archive.addfile(item,io.BytesIO(data))
+        return path
 
     def test_missing_and_tampered_wheel_keeps_other_evidence(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -190,10 +252,10 @@ class EvidenceTests(unittest.TestCase):
     def test_dependency_binding(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);(root/'implementation').mkdir();(root/'release').mkdir()
-            files={'implementation/Cargo.lock':b'cargo','release/verification-requirements.txt':b'python','tools/audit_dependencies.py':b'tool'}
+            files={'implementation/Cargo.lock':b'cargo','release/verification-requirements.txt':b'python','tools/audit_dependencies.py':b'tool','implementation/ordavyn-core/Cargo.toml':b'manifest','implementation/ordavyn-core/examples/audit_semver.rs':b'helper source'}
             for name,data in files.items():
-                p=root/name;p.parent.mkdir(exist_ok=True);p.write_bytes(data)
-            binding={'source_commit':'a'*40,'locks':{n:rc.sha(d) for n,d in files.items() if n!='tools/audit_dependencies.py'},'producer':{'tools/audit_dependencies.py':rc.sha(b'tool')}}
+                p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
+            binding={'source_commit':'a'*40,'locks':{n:rc.sha(files[n]) for n in ('implementation/Cargo.lock','release/verification-requirements.txt')},'producer':{n:rc.sha(files[n]) for n in ('tools/audit_dependencies.py','implementation/ordavyn-core/Cargo.toml','implementation/ordavyn-core/examples/audit_semver.rs')},'semver_helper':{'sha256':'1'*64}}
             report=root/'report';report.write_text(json.dumps({'binding':binding}))
             with patch.object(runner,'git',side_effect=lambda repo,command,ref:files[ref.split(':',1)[1]]):
                 self.assertEqual(runner.dependency_binding(root,report,'.','b'*40)['lock_binding'],'IDENTICAL_LOCK_BYTES_OTHER_COMMIT')
@@ -204,6 +266,29 @@ class EvidenceTests(unittest.TestCase):
                 binding['locks']['implementation/Cargo.lock']=rc.sha(b'cargo');binding['producer']={};report.write_text(json.dumps({'binding':binding}))
                 with self.assertRaisesRegex(rc.Rejected,'producer mismatch'):runner.dependency_binding(root,report,'.','b'*40)
             with self.assertRaisesRegex(rc.Rejected,'required'):runner.dependency_binding(root,None,'.','b'*40)
+
+    def test_verified_helper_reproduces_report_and_rejects_status_change(self):
+        project=Path(__file__).parents[2]
+        subprocess.run(['cargo','+1.98.1','build','--locked','--offline','--example','audit_semver'],cwd=project/'implementation',check=True)
+        helper=project/'implementation/target/debug/examples/audit_semver'
+        row={'package':'demo','version':'1.2.3','id':'TEST','status':'NOT_AFFECTED','advisory':{'advisory':{'id':'TEST','package':'demo'},'versions':{'patched':['>=1.2.3'],'unaffected':[]}}}
+        with tempfile.TemporaryDirectory() as temp:
+            report=Path(temp)/'report';report.write_text(json.dumps({'rustsec_matches':[row]}))
+            self.assertEqual(runner.verify_semver_results(helper,report,os.environ)['status'],'REPRODUCED')
+            row['status']='BLOCKER';report.write_text(json.dumps({'rustsec_matches':[row]}))
+            with self.assertRaisesRegex(rc.Rejected,'result mismatch'):
+                runner.verify_semver_results(helper,report,os.environ)
+
+    def test_verifier_rejects_malformed_helper_response(self):
+        row={'package':'demo','version':'1.2.3','id':'TEST','status':'NOT_AFFECTED','advisory':{'advisory':{'id':'TEST','package':'demo'},'versions':{'patched':['>=1.2.3'],'unaffected':[]}}}
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);report=root/'report';report.write_text(json.dumps({'rustsec_matches':[row]}))
+            helper=root/'helper';helper.write_text('#!/bin/sh\nprintf \'[]\\n\'\n');helper.chmod(0o755)
+            with self.assertRaisesRegex(rc.Rejected,'response mismatch'):
+                runner.verify_semver_results(helper,report,os.environ)
+            helper.write_text('#!/bin/sh\nprintf \'[{"matches":[1]}]\\n\'\n');helper.chmod(0o755)
+            with self.assertRaisesRegex(rc.Rejected,'response mismatch'):
+                runner.verify_semver_results(helper,report,os.environ)
 
     def test_own_installed_payload_tampering(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import platform
 import re
+import os
 import subprocess
 import sys
 import tomllib
@@ -37,27 +38,67 @@ def notices(root):
     return result
 
 
-def rustsec_matches(lock, archive_path):
+def semver_matches(helper, queries):
+    if helper is None:
+        return [None] * len(queries)
+    try:
+        raw=subprocess.check_output([str(helper)],input=json.dumps(queries).encode(),stderr=subprocess.DEVNULL,timeout=30)
+        answers=json.loads(raw)
+        if not isinstance(answers,list) or len(answers)!=len(queries): raise ValueError('invalid helper response')
+        result=[]
+        for query,answer in zip(queries,answers):
+            matches=answer.get('matches') if isinstance(answer,dict) else None
+            if not isinstance(matches,list) or len(matches)!=len(query['requirements']) or any(type(value) is not bool for value in matches):
+                result.append(None)
+            else: result.append(matches)
+        return result
+    except (OSError,subprocess.CalledProcessError,subprocess.TimeoutExpired,ValueError,TypeError,json.JSONDecodeError):
+        return [None] * len(queries)
+
+
+def prepare_semver_helper(root, output, lock=None):
+    lock=lock or tomllib.loads((root/'implementation/Cargo.lock').read_text())
+    target=output/'semver-build'
+    home=output/'semver-home';cargo_home=output/'semver-cargo-home'
+    home.mkdir();(cargo_home/'registry/cache').mkdir(parents=True)
+    host=Path.home();host_cache=host/'.cargo/registry/cache';archives={}
+    for package in lock['package']:
+        if package.get('source')!='registry+https://github.com/rust-lang/crates.io-index': continue
+        key=package['name']+'-'+package['version'];matches=[]
+        for path in list(host_cache.glob('*/'+key+'.crate'))+list(output.glob(key+'.crate')):
+            if digest(path.read_bytes())==package['checksum']: matches.append(path)
+        if not matches: continue
+        source=matches[0];destination=cargo_home/'registry/cache'/source.parent.name/source.name
+        destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(source.read_bytes())
+        archives[key]={'sha256':package['checksum'],'source':package['source']}
+    index=host/'.cargo/registry/index'
+    if index.exists(): (cargo_home/'registry/index').symlink_to(index,target_is_directory=True)
+    for directory in (root,*root.parents):
+        if any((directory/'.cargo'/name).exists() for name in ('config','config.toml')): raise ValueError('unexpected ancestor Cargo override')
+    blocked={'HOME','CARGO_HOME','RUSTUP_HOME','RUSTFLAGS','RUSTC_WRAPPER','CARGO_ENCODED_RUSTFLAGS','CARGO_TARGET_DIR','CC','CXX','AR','LD'}
+    env={key:value for key,value in os.environ.items() if key not in blocked and not key.startswith('CARGO_TARGET_')}
+    remap=f'--remap-path-prefix={root.resolve()}=/ordavyn-source --remap-path-prefix={cargo_home.resolve()}=/cargo-home'
+    env.update({'PATH':str(host/'.cargo/bin')+':/usr/local/bin:/usr/bin:/bin','HOME':str(home),'CARGO_HOME':str(cargo_home),'RUSTUP_HOME':str(host/'.rustup'),'RUSTUP_TOOLCHAIN':'1.98.1','CARGO_TARGET_DIR':str(target),'CARGO_NET_OFFLINE':'true','RUSTFLAGS':remap})
+    subprocess.run(['cargo','+1.98.1','build','--locked','--offline','--example','audit_semver'],cwd=root/'implementation',env=env,check=True,timeout=300,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    helper=target/'debug/examples/audit_semver'
+    if not helper.is_file() or helper.is_symlink(): raise ValueError('semver helper missing')
+    canary=semver_matches(helper,[{'version':'1.2.3','requirements':['>=1.2.3','<1.2.3']}])
+    if canary!=[[True,False]]: raise ValueError('semver helper canary failed')
+    extracted={}
+    for source in sorted((cargo_home/'registry/src').glob('*/*')):
+        if not source.is_dir(): continue
+        rows=[]
+        for path in sorted(source.rglob('*')):
+            if path.is_file() and not path.is_symlink(): rows.append((str(path.relative_to(source)),digest(path.read_bytes())))
+        extracted[source.name]=digest(json.dumps(rows,separators=(',',':')).encode())
+    return helper,{'archives':archives,'extracted_source_sha256':extracted,'sha256':digest(helper.read_bytes()),'environment':{'fresh_home':True,'fresh_cargo_home':True,'offline':True,'locked':True}}
+
+
+def rustsec_matches(lock, archive_path, semver_helper=None):
     import tarfile
     packages={}
     for item in lock['package']:
         packages.setdefault(item['name'],[]).append(item['version'])
-    def matches(version, expression):
-        # Only complete stable triples; never interpret Rust ranges as PEP440.
-        triple=r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
-        current_match=re.fullmatch(triple,version)
-        if not current_match or not isinstance(expression,str): return None
-        current=tuple(map(int,current_match.groups()));tests=[]
-        for part in expression.split(','):
-            match=re.fullmatch(r'\s*(>=|<=|>|<|=|\^)?\s*'+triple+r'\s*',part)
-            if not match: return None
-            op,*nums=match.groups();bound=tuple(map(int,nums))
-            if op in (None,'^'):
-                major,minor,patch=bound
-                upper=(major+1,0,0) if major else (0,minor+1,0) if minor else (0,0,patch+1)
-                tests.append(bound<=current<upper)
-            else: tests.append({'=':current==bound,'>':current>bound,'>=':current>=bound,'<':current<bound,'<=':current<=bound}[op])
-        return all(tests)
     result=[]
     with tarfile.open(archive_path) as archive:
         for item in archive:
@@ -71,9 +112,12 @@ def rustsec_matches(lock, archive_path):
                 conditions=data.get('versions',{})
                 patched=conditions.get('patched',[]);unaffected=conditions.get('unaffected',[])
                 if not isinstance(patched,list) or not isinstance(unaffected,list): raise ValueError('invalid ranges')
-                for version in packages.get(name,[]):
-                    tests=[matches(version,v) for v in patched+unaffected]
-                    status='WITHDRAWN' if advisory.get('withdrawn') else 'UNKNOWN' if None in tests else 'NOT_AFFECTED' if True in tests else 'BLOCKER'
+                versions=packages.get(name,[])
+                requirements=patched+unaffected
+                queries=[{'version':version,'requirements':requirements} for version in versions]
+                answers=semver_matches(semver_helper,queries)
+                for version,tests in zip(versions,answers):
+                    status='WITHDRAWN' if advisory.get('withdrawn') else 'UNKNOWN' if tests is None else 'NOT_AFFECTED' if True in tests else 'BLOCKER'
                     result.append({'package':name,'version':version,'id':identifier,'status':status,'advisory':data,'sha256':digest(raw_bytes)})
             except (ValueError,KeyError,TypeError,AttributeError) as error:
                 result.append({'path':item.name,'status':'UNKNOWN','reason':type(error).__name__,'sha256':digest(raw_bytes)})
@@ -156,7 +200,9 @@ def audit(root, output, online=False, download_cargo=False, wheelhouse=None):
     report={'date_utc':datetime.now(timezone.utc).isoformat(),'environment':{'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),'rust':'UNKNOWN'},'publication':'BLOCKED','cargo':[],'python':[]}
     try: report['environment']['rust']=subprocess.check_output(['rustc','+1.98.1','-Vv']).decode()
     except (OSError,subprocess.CalledProcessError): pass
-    report['binding']={'locks':{name:digest((root/name).read_bytes()) for name in ('implementation/Cargo.lock','release/verification-requirements.txt')},'producer':{'tools/audit_dependencies.py':digest(Path(__file__).read_bytes())}}
+    producer_names=('tools/audit_dependencies.py','implementation/ordavyn-core/Cargo.toml','implementation/ordavyn-core/examples/audit_semver.rs')
+    report['binding']={'locks':{name:digest((root/name).read_bytes()) for name in ('implementation/Cargo.lock','release/verification-requirements.txt')},'producer':{name:(digest((root/name).read_bytes()) if (root/name).is_file() else 'UNKNOWN') for name in producer_names}}
+    helper=None
     try: report['binding']['source_commit']=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],stderr=subprocess.DEVNULL).decode().strip()
     except (OSError,subprocess.CalledProcessError): report['binding']['source_commit']='UNKNOWN'
     cargo_home=Path.home()/'.cargo/registry'
@@ -242,7 +288,13 @@ def audit(root, output, online=False, download_cargo=False, wheelhouse=None):
         report['rustsec_index']=fetch('https://api.github.com/repos/RustSec/advisory-db/commits/HEAD')
     rustsec_archive=root/'.ordavyn-private/release-candidate/rustsec.tar.gz'
     report['rustsec_archive']=rustsec_evidence(rustsec_archive,root/'.ordavyn-private/release-candidate/rustsec.tar.json',report.get('rustsec_index',{}).get('data',{}).get('sha'),online)
-    if report['rustsec_archive']['status']=='MATCHED_IMMUTABLE_SNAPSHOT': report['rustsec_matches']=rustsec_matches(lock,rustsec_archive)
+    if report['rustsec_archive']['status']=='MATCHED_IMMUTABLE_SNAPSHOT':
+        try:
+            helper,helper_evidence=prepare_semver_helper(root,output,lock)
+            report['binding']['semver_helper']=helper_evidence
+        except (OSError,ValueError,subprocess.CalledProcessError,subprocess.TimeoutExpired):
+            report['binding']['semver_helper']={'status':'UNKNOWN'}
+        report['rustsec_matches']=rustsec_matches(lock,rustsec_archive,helper)
     report['limitations']=['No legal or trademark clearance; registry response is only a dated observation.','Advisory data does not establish absence of vulnerabilities.','License metadata and notice hashes are evidence, not interpretation of obligations.','Cargo entries unavailable locally remain UNKNOWN, including untested targets.','Transitive bundled components require separate review.']
     (output/'dependencies.json').write_text(json.dumps(report,indent=2,default=str)+'\n')
     return report

@@ -234,6 +234,23 @@ def test_rust_tls_stop_and_cancel_keep_handler_owned(certificates,monkeypatch):
     assert peer.call('tls-lifecycle')=='tls lifecycle passed'
 
 
+@pytest.mark.parametrize('damaged', ['empty-cert','malformed-cert','empty-key','malformed-key','mismatched-key'])
+def test_rust_pem_parser_rejects_invalid_inputs(damaged,certificates,tmp_path,monkeypatch):
+    ca,(cert,key),_=certificates[:3]
+    bad_cert=tmp_path/'bad-cert.pem';bad_key=tmp_path/'bad-key.pem'
+    bad_cert.write_bytes(b'' if damaged=='empty-cert' else b'-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n')
+    if damaged=='mismatched-key':
+        _,other_key=certificates[3]('ip')
+        bad_key.write_bytes(other_key.read_bytes())
+    else:
+        bad_key.write_bytes(b'' if damaged=='empty-key' else b'-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n')
+    monkeypatch.setenv('ORDAVYN_TLS_CA',str(ca))
+    monkeypatch.setenv('ORDAVYN_TLS_CERT',str(bad_cert if 'cert' in damaged else cert))
+    monkeypatch.setenv('ORDAVYN_TLS_KEY',str(bad_key if 'key' in damaged else key))
+    with pytest.raises(subprocess.CalledProcessError):
+        peer.call('tls-lifecycle')
+
+
 def test_python_tls_stop_waits_for_admitted_handler(certificates,monkeypatch,tmp_path):
     with server('python',certificates,monkeypatch) as (port,count,app):
         entered=threading.Event();release=threading.Event()

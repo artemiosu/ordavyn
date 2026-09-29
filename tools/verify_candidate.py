@@ -76,10 +76,53 @@ def dependency_binding(root,report_path,repo,commit):
     if not isinstance(evidence_commit,str) or not re.fullmatch('[0-9a-f]{40}',evidence_commit): raise Rejected('dependency report source unknown')
     for name,digest in locks.items():
         if sha(git(repo,'show',evidence_commit+':'+name))!=digest: raise Rejected('dependency report source lock mismatch')
-    expected={'tools/audit_dependencies.py':sha(git(repo,'show',evidence_commit+':tools/audit_dependencies.py'))}
-    selected={'tools/audit_dependencies.py':sha(git(repo,'show',commit+':tools/audit_dependencies.py'))}
+    producer_names=('tools/audit_dependencies.py','implementation/ordavyn-core/Cargo.toml','implementation/ordavyn-core/examples/audit_semver.rs')
+    expected={name:sha(git(repo,'show',evidence_commit+':'+name)) for name in producer_names}
+    selected={name:sha(git(repo,'show',commit+':'+name)) for name in producer_names}
     if binding.get('producer')!=expected or expected!=selected: raise Rejected('dependency report producer mismatch')
-    return {'sha256':sha(raw),'source_commit':evidence_commit,'lock_binding':'SAME_COMMIT' if evidence_commit==commit else 'IDENTICAL_LOCK_BYTES_OTHER_COMMIT','locks':locks}
+    helper=binding.get('semver_helper',{})
+    if not isinstance(helper,dict) or not re.fullmatch(r'[0-9a-f]{64}',helper.get('sha256','')): raise Rejected('dependency report semver helper unknown')
+    return {'sha256':sha(raw),'source_commit':evidence_commit,'lock_binding':'SAME_COMMIT' if evidence_commit==commit else 'IDENTICAL_LOCK_BYTES_OTHER_COMMIT','locks':locks,'semver_helper_sha256':helper['sha256']}
+
+
+def verify_semver_results(helper, report_path, env):
+    report=json.loads(Path(report_path).read_text())
+    rows=report.get('rustsec_matches')
+    if not isinstance(rows,list): raise Rejected('dependency report RustSec results missing')
+    queries=[]
+    for row in rows:
+        try:
+            versions=row['advisory'].get('versions',{})
+            requirements=versions.get('patched',[])+versions.get('unaffected',[])
+            if not isinstance(requirements,list): raise TypeError
+            queries.append({'version':row['version'],'requirements':requirements})
+        except (KeyError,TypeError,AttributeError):
+            queries.append(None)
+    valid=[query for query in queries if query is not None]
+    try:
+        answers=json.loads(subprocess.check_output([str(helper)],input=json.dumps(valid).encode(),env=env,timeout=30))
+    except (OSError,subprocess.CalledProcessError,subprocess.TimeoutExpired,json.JSONDecodeError) as error:
+        raise Rejected('dependency report RustSec helper failed') from error
+    if not isinstance(answers,list) or len(answers)!=len(valid):
+        raise Rejected('dependency report RustSec helper response mismatch')
+    iterator=iter(answers)
+    for row,query in zip(rows,queries):
+        if query is None:
+            expected='UNKNOWN'
+        else:
+            answer=next(iterator);matches=answer.get('matches') if isinstance(answer,dict) else None
+            if not isinstance(matches,list) or len(matches)!=len(query['requirements']) or any(type(value) is not bool for value in matches):
+                raise Rejected('dependency report RustSec helper response mismatch')
+            expected='WITHDRAWN' if row['advisory']['advisory'].get('withdrawn') else 'NOT_AFFECTED' if True in matches else 'BLOCKER'
+        if row.get('status')!=expected: raise Rejected('dependency report RustSec result mismatch')
+    return {'rows':len(rows),'status':'REPRODUCED'}
+
+
+def verify_helper_binary(helper, dependency_evidence):
+    expected=dependency_evidence.get('semver_helper_sha256')
+    if not isinstance(expected,str) or not re.fullmatch(r'[0-9a-f]{64}',expected): raise Rejected('dependency report semver helper unknown')
+    if not helper.is_file() or helper.is_symlink() or sha(helper.read_bytes())!=expected: raise Rejected('dependency report semver helper binary mismatch')
+    return expected
 
 
 def prepare_rust_inputs(root,env):
@@ -161,11 +204,11 @@ def suite_summary(args,text):
     if re.search(r'\b[1-9][0-9]* (?:skipped|deselected|xfailed|filtered out|ignored)\b',text): raise Rejected('incomplete test suite')
     if 'test_conformance.py' in command:
         counts=[int(x) for x in re.findall(r'(\d+) passed',text)]
-        if counts!=[249,154]: raise Rejected('unexpected conformance test counts')
+        if counts!=[249,159]: raise Rejected('unexpected conformance test counts')
         return {'suite':'python-conformance','passed':counts,'skipped':0,'deselected':0}
     if 'cargo' in command and 'test' in args:
         counts=[int(x) for x in re.findall(r'test result: ok\. (\d+) passed',text)]
-        if sum(counts)!=96: raise Rejected('unexpected Rust test counts')
+        if sum(counts)!=97: raise Rejected('unexpected Rust test counts')
         return {'suite':'rust','passed':sum(counts),'ignored':0,'filtered':0}
     if 'unittest' in args:
         counts=re.findall(r'Ran (\d+) tests',text)
@@ -199,6 +242,7 @@ def run_verification(root,manifest_path,output,wheelhouse,archive=None,repo=None
         if sha(destination.read_bytes())!=entry['wheel_sha256']: raise Rejected('wheel changed during copy')
         entry['wheel']=str(destination)
     env=controlled_environment(output,selected_wheels)
+    env['RUSTFLAGS']=f'--remap-path-prefix={root}=/ordavyn-source --remap-path-prefix={Path(env["CARGO_HOME"]).resolve()}=/cargo-home'
     rust_inputs=prepare_rust_inputs(root,env)
     rust_path=output/'rust-inputs.json';rust_path.write_text(json.dumps(rust_inputs,indent=2)+'\n')
     inventory=environment_inventory(env)
@@ -218,6 +262,13 @@ def run_verification(root,manifest_path,output,wheelhouse,archive=None,repo=None
     run(['cargo','+1.98.1','test','--locked','--offline'],root/'implementation')
     run(['cargo','+1.98.1','build','--release','--locked','--offline'],root/'implementation')
     run(['cargo','+1.98.1','build','--examples','--locked','--offline'],root/'implementation')
+    helper=root/'implementation/target/debug/examples/audit_semver'
+    if dependency_evidence.get('semver_helper_sha256'):
+        verify_helper_binary(helper,dependency_evidence)
+        canary=json.loads(subprocess.check_output([str(helper)],input=b'[{"version":"1.2.3","requirements":[">=1.2.3","<1.2.3"]}]',env=env,timeout=30))
+        if canary!=[{'matches':[True,False]}]: raise Rejected('verification semver helper failed canary')
+        dependency_evidence['verification_semver_helper_sha256']=sha(helper.read_bytes())
+        dependency_evidence['rustsec_reproduction']=verify_semver_results(helper,dependency_report,env)
     run([sys.executable,'-m','unittest','discover','-s',root/'tools/tests','-v'])
     # Build a disposable copy selected only from manifest paths, without stale egg-info.
     build_source=output/'sdk-build';build_source.mkdir()

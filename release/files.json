@@ -93,6 +93,10 @@
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
     },
+    "implementation/ordavyn-core/examples/audit_semver.rs": {
+      "action": "include",
+      "reason": "Verification-only Rust semver evaluator used by the dependency audit"
+    },
     "implementation/ordavyn-core/examples/interop_peer.rs": {
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"

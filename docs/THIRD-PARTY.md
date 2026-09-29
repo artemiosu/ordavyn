@@ -38,14 +38,14 @@ that actual artifact before distribution; this summary cannot substitute for it.
 On 2026-09-29, official PyPI JSON was fetched for the 14 pinned verification inputs;
 its vulnerability arrays were empty. The official RustSec database snapshot is
 `f23b768236fe2880e4cfa167da662cad8ca79240`; matching considers every locked version,
-including multiple versions of a crate. The relevant unresolved finding is
-[rustls-pemfile is unmaintained](https://rustsec.org/advisories/RUSTSEC-2025-0134.html).
-This is an informational maintenance advisory, not a demonstrated vulnerability.
-The stricter full-version matcher leaves **8 locked-version advisory matches UNKNOWN**
-because their ranges are outside its supported syntax; these have not been shown
-unaffected. It classifies 38 matches NOT_AFFECTED, one WITHDRAWN and the one
-maintenance finding BLOCKER. The immutable official archive bytes were freshly
-fetched and matched, with the same commit as official HEAD on 2026-09-29.
-Unsupported advisory syntax and inaccessible sources are UNKNOWN. A dated absence
-of matching vulnerability records is not a security guarantee. No automatic
-package update or new runtime requirement is introduced.
+including multiple versions of a crate. The unsupported `rustls-pemfile` wrapper
+has been removed; PEM parsing uses the already present `rustls-pki-types` API.
+RustSec conditions are evaluated by pinned Rust `semver 1.0.28`, with source and
+helper hashes recorded in private evidence. Invalid conditions, invalid versions,
+helper failures and inaccessible sources remain UNKNOWN. A fresh final audit tied
+to the exact candidate must replace the earlier evidence binding. Against the
+recorded official snapshot, the new matcher classifies 46 matches NOT_AFFECTED
+and one withdrawn informational advisory WITHDRAWN, with no UNKNOWN or BLOCKER.
+A dated absence of matching
+vulnerability records is not a security guarantee. No new runtime requirement is
+introduced.

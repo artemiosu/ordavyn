@@ -57,7 +57,9 @@ crates are sent to official endpoints):
 
 Cargo archives are matched to lock checksums, read without executing, and retained
 privately when previously missing. Graph/conditions and all source/notice hashes
-are retained. RustSec matching can additionally read the separately fetched
+are retained. RustSec matching uses pinned Rust `semver` through the freshly built
+verification-only helper; malformed input or helper failure remains UNKNOWN. It
+can additionally read the separately fetched
 `.ordavyn-private/release-candidate/rustsec.tar.gz`; record its official URL, commit
 and SHA-256 in `rustsec.tar.json` alongside it. Online audit fetches the immutable official URL and compares response bytes with
 the archive; only then can a freshly fetched matching HEAD establish freshness.
@@ -137,15 +139,16 @@ permissions 0755, with one exact exception: the pinned wheel writer explicitly
 sets `ordavyn-0.1.0.dist-info/RECORD` to 0664 regardless of umask. That path must
 have exactly 0664; the exception does not apply to any other archive member.
 Verification records each archive member's mode, size and SHA-256. Separate command
-logs establish 96 Rust tests and 249 SDK plus 154 recovery/TLS tests in each package
+logs establish 97 Rust tests and 249 SDK plus 159 recovery/TLS tests in each package
 installation; skipped, ignored or filtered suites cannot produce TESTS_PASS.
 Python dependency license/notice evidence comes from hash-verified wheels, not
 mutable installed distributions. Missing/mismatched components stay UNKNOWN while
 other available evidence remains in the report.
 
 Commit the reviewed tools and locks before generating fresh dependency evidence.
-The required dependency report carries its source commit, both lock hashes and
-audit producer hash. The runner verifies these against Git and binds its report
+The required dependency report carries its source commit, both lock hashes, the
+audit/helper source hashes and the helper binary hash. The runner verifies these
+against Git and binds its report
 hash to the result. Evidence from another commit is explicitly identified and
 accepted only with identical lock bytes and an auditor hash matching both
 commits. Executing

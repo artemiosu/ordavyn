@@ -2,7 +2,10 @@
 use crate::security::invalid;
 use crate::Result;
 use std::sync::Arc;
-use tokio_rustls::rustls::{self, pki_types::ServerName};
+use tokio_rustls::rustls::{
+    self,
+    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer, ServerName},
+};
 
 #[derive(Clone)]
 pub struct ClientTls {
@@ -12,7 +15,7 @@ pub struct ClientTls {
 impl ClientTls {
     pub fn from_pem(ca: &[u8], expected_name: &str) -> Result<Self> {
         let mut roots = rustls::RootCertStore::empty();
-        for cert in rustls_pemfile::certs(&mut std::io::Cursor::new(ca)) {
+        for cert in CertificateDer::pem_reader_iter(&mut std::io::Cursor::new(ca)) {
             roots
                 .add(cert.map_err(|_| invalid("invalid CA PEM"))?)
                 .map_err(|_| invalid("invalid CA"))?;
@@ -43,10 +46,12 @@ pub struct ServerTls {
 }
 impl ServerTls {
     pub fn from_pem(chain: &[u8], key: &[u8]) -> Result<Self> {
-        let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(chain))
+        let certs = CertificateDer::pem_reader_iter(&mut std::io::Cursor::new(chain))
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(|_| invalid("invalid certificate PEM"))?;
-        let key = rustls_pemfile::private_key(&mut std::io::Cursor::new(key))
+        let key = PrivateKeyDer::pem_reader_iter(&mut std::io::Cursor::new(key))
+            .next()
+            .transpose()
             .map_err(|_| invalid("invalid TLS private key"))?
             .ok_or_else(|| invalid("missing TLS private key"))?;
         let mut config = rustls::ServerConfig::builder_with_provider(Arc::new(

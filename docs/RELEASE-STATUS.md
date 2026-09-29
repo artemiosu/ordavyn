@@ -40,14 +40,12 @@ only a newly generated private result report records the candidate's fresh run.
 ## Remaining decisions and blockers
 
 - Owner approval for publication and a concrete public release is absent.
-- RustSec [RUSTSEC-2025-0134](https://rustsec.org/advisories/RUSTSEC-2025-0134.html)
-  identifies `rustls-pemfile 2.2.0` as **unmaintained**. This is a maintenance
-  advisory, not evidence of an exploit. It requires a separately reviewed
-  dependency decision; this preparation does not update dependencies.
-- Eight additional locked-version RustSec advisory matches remain **UNKNOWN**
-  under the deliberately restricted stable full-version parser. They require
-  separate evaluation before release approval; results from the earlier matcher
-  do not establish that these versions are unaffected.
+- The unmaintained `rustls-pemfile 2.2.0` wrapper has been removed. The existing
+  `rustls-pki-types` dependency now parses PEM without changing the public TLS API.
+  RustSec conditions use pinned Rust `semver 1.0.28`; invalid data or helper failure
+  remains UNKNOWN. The recorded official snapshot now evaluates to 46 NOT_AFFECTED,
+  one WITHDRAWN, no UNKNOWN and no BLOCKER. The final candidate still requires a
+  fresh official audit tied to its exact commit.
 - Dependency obligations, nested components and any future redistribution of
   compiled dependencies need review. See [third-party evidence](THIRD-PARTY.md).
   Missing evidence is UNKNOWN, never a clean bill of health.
