@@ -43,13 +43,3 @@ copyright-holder substitution made. The original and prior commits are unchanged
 The unchanged legal original has SHA-256
 `1f4e8f358c0ec6b0088abb1b627f85a0038092263b86f698fd5a72ce351ff6d2`.
 No rights-holder substitution was made in that original.
-
-## Local candidate preparation (2026-09-29)
-
-The release tools read exact blobs from a selected reviewed Git commit and omit
-Git history, private planning and external originals. Every tracked path is
-classified in `release/files.json`; artifact inventories record original byte
-hashes and file modes. These checks establish composition, not independent legal
-clearance or a release approval. Historical former names remain in unchanged
-commits and private audit evidence. See [dependency evidence](THIRD-PARTY.md) and
-[release blockers](RELEASE-STATUS.md). Existing original archives are unchanged.

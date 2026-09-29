@@ -15,7 +15,7 @@ and bounded shutdown without clearing replay protection.
 Unknown outcomes require application reconciliation; external effects are not exactly-once.
 
 This is not an approved release, security certification or production service.
-The owner selected Apache-2.0 and states that they created the code only with AI assistance; dependency and attribution review remains separate. No real operations, delegation, negotiation,
+The owner selected Apache-2.0; provenance and attribution review remains open. No real operations, delegation, negotiation,
 or post-quantum cryptography are implemented.
 
 See [implementation guide](implementation/README.md),
@@ -25,7 +25,3 @@ excluded from the publishable file set. Publication requires a separate decision
 
 See the [authenticated v3 exchange guide](docs/LOCAL-WIRE-V3.md) for explicit TLS 1.3 configuration,
 protocol pins, HTTP test mode without confidentiality and the threat model.
-
-The [local candidate procedure](release/README.md) records exact source/package
-contents and verification inputs. See [third-party evidence](docs/THIRD-PARTY.md)
-and the concrete release blockers before considering any distribution.
