@@ -132,6 +132,17 @@ class EvidenceTests(unittest.TestCase):
             helper.write_bytes(b'substituted')
             self.assertEqual(audit.semver_matches(helper,[{'version':'1.2.3','requirements':['>=1.2']}]),[None])
 
+    def test_audit_resolves_relative_controlled_paths_before_changing_cwd(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+            root=Path(temp);(root/'implementation').mkdir();(root/'release').mkdir()
+            (root/'implementation/Cargo.lock').write_text('package = []\n')
+            (root/'release/verification-requirements.txt').write_text('')
+            relative=root.relative_to(Path.cwd())
+            with patch.object(audit,'rustsec_evidence',return_value={'status':'UNKNOWN'}),patch.object(audit.subprocess,'check_output',side_effect=OSError):
+                report=audit.audit(relative,relative/'relative-output',wheelhouse=relative)
+            self.assertEqual(report['cargo'],[])
+            self.assertTrue((root/'relative-output/dependencies.json').is_file())
+
     def test_verifier_rejects_mismatched_helper_binary_hash(self):
         with tempfile.TemporaryDirectory() as temp:
             helper=Path(temp)/'helper';helper.write_bytes(b'actual');helper.chmod(0o755)
