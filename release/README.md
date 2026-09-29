@@ -58,7 +58,9 @@ Cargo archives are matched to lock checksums, read without executing, and retain
 privately when previously missing. Graph/conditions and all source/notice hashes
 are retained. RustSec matching can additionally read the separately fetched
 `.ordavyn-private/release-candidate/rustsec.tar.gz`; record its official URL, commit
-and SHA-256 alongside it. A fetched index alone is not an advisory scan. The
+and SHA-256 in `rustsec.tar.json` alongside it. The immutable official URL,
+commit and archive hash must agree; freshness is UNKNOWN unless the freshly
+fetched official HEAD also matches. A fetched index alone is not an advisory scan. The
 limited matcher returns UNKNOWN for unsupported syntax. Name endpoint HTTP 404
 is an observation, not a right to use a name. See [release blockers](../docs/RELEASE-STATUS.md).
 

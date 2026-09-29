@@ -321,6 +321,10 @@
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
     },
+    "tools/tests/test_release_evidence.py": {
+      "action": "include",
+      "reason": "Negative package and evidence regression tests"
+    },
     "tools/verify_candidate.py": {
       "action": "include",
       "reason": "Reproducible local verification runner"

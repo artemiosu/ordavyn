@@ -52,6 +52,13 @@ class CandidateTests(unittest.TestCase):
         (self.root/'file.txt').write_text('changed')
         with self.assertRaises(rc.Rejected): self.export()
 
+    def test_assume_unchanged_does_not_hide_edits(self):
+        self.git('update-index','--assume-unchanged','file.txt')
+        (self.root/'file.txt').write_text('hidden edit')
+        self.assertEqual(self.git('status','--porcelain'),b'')
+        with self.assertRaises(rc.Rejected):self.export()
+
+
     def test_untracked(self):
         (self.root/'extra.txt').write_text('extra')
         with self.assertRaises(rc.Rejected): self.export()
@@ -136,6 +143,19 @@ class CandidateTests(unittest.TestCase):
         self.commit()
         with self.assertRaises(rc.Rejected):self.export()
         self.assertFalse((Path(self.tmp.name)/'result/COMPOSITION-PASS').exists())
+
+
+    def test_export_preserves_history_without_exporting_it(self):
+        (self.root/'file.txt').write_text('former-protocol-label')
+        self.commit();historical=self.head
+        (self.root/'file.txt').write_text('current-protocol-label')
+        self.commit();history_before=self.git('rev-list','--all')
+        self.export()
+        members=rc.archive_entries(Path(self.tmp.name)/'result/source.tar.gz')
+        self.assertFalse(any(name.startswith('.git/') for name in members))
+        self.assertNotIn(b'former-protocol-label',b''.join(members.values()))
+        self.assertEqual(self.git('show',historical+':file.txt'),b'former-protocol-label')
+        self.assertEqual(self.git('rev-list','--all'),history_before)
 
 
     def test_old_snapshot_rejected(self):

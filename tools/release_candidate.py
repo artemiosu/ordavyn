@@ -6,6 +6,9 @@ import hashlib
 import io
 import json
 import os
+import platform
+import sys
+import zlib
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
@@ -129,6 +132,9 @@ def export(root, commit, output):
         if kind != 'blob' or mode not in ('100644', '100755'):
             raise Rejected(f'non-regular snapshot entry: {name}')
         blobs[name] = git(root, 'cat-file', 'blob', oid)
+        working = root / name
+        if working.is_symlink() or not working.is_file() or working.read_bytes() != blobs[name] or bool(working.stat().st_mode & 0o111) != (mode == '100755'):
+            raise Rejected(f'working file differs from selected blob: {name}')
         modes[name] = int(mode, 8) & 0o777
     try:
         policy = json.loads(blobs['release/files.json'])
@@ -144,7 +150,7 @@ def export(root, commit, output):
         if rule['action'] == 'include':
             inspect_content(name, blobs[name])
             selected[name] = blobs[name]
-    manifest = {'schema': 1, 'commit': commit, 'files': [
+    manifest = {'schema': 1, 'commit': commit, 'exporter_environment': {'python': sys.version, 'platform': platform.platform(), 'zlib': zlib.ZLIB_RUNTIME_VERSION}, 'files': [
         {'path': name, 'size': len(data), 'mode': format(modes[name], '04o'), 'sha256': sha(data)}
         for name, data in sorted(selected.items())]}
     # Reserve output atomically; no successful marker until verification finishes.

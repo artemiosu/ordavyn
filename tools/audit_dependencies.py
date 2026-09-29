@@ -72,6 +72,18 @@ def rustsec_matches(lock, archive_path):
     return result
 
 
+def rustsec_evidence(archive_path, provenance_path, current_commit=None):
+    try:
+        provenance=json.loads(Path(provenance_path).read_text())
+        commit=provenance['commit']
+        if not re.fullmatch(r'[0-9a-f]{40}',commit): raise ValueError('invalid commit')
+        if provenance['url']!='https://api.github.com/repos/RustSec/advisory-db/tarball/'+commit: raise ValueError('not immutable official URL')
+        if digest(Path(archive_path).read_bytes())!=provenance['sha256']: raise ValueError('archive hash mismatch')
+        return {'status':'MATCHED_IMMUTABLE_SNAPSHOT','commit':commit,'sha256':provenance['sha256'],'url':provenance['url'],'freshness':'CURRENT_HEAD' if current_commit==commit else 'UNKNOWN'}
+    except (OSError,KeyError,ValueError) as error:
+        return {'status':'UNKNOWN','reason':type(error).__name__,'freshness':'UNKNOWN'}
+
+
 def audit(root, output, online=False, download_cargo=False):
     root, output=Path(root),Path(output)
     output.mkdir(parents=True,exist_ok=False)
@@ -152,7 +164,8 @@ def audit(root, output, online=False, download_cargo=False):
         report['name_availability']={name:fetch(url) for name,url in {'pypi_ordavyn':'https://pypi.org/pypi/ordavyn/json','crates_ordavyn_core':'https://crates.io/api/v1/crates/ordavyn-core'}.items()}
         report['rustsec_index']=fetch('https://api.github.com/repos/RustSec/advisory-db/commits/HEAD')
     rustsec_archive=root/'.ordavyn-private/release-candidate/rustsec.tar.gz'
-    if rustsec_archive.exists(): report['rustsec_matches']=rustsec_matches(lock,rustsec_archive)
+    report['rustsec_archive']=rustsec_evidence(rustsec_archive,root/'.ordavyn-private/release-candidate/rustsec.tar.json',report.get('rustsec_index',{}).get('data',{}).get('sha'))
+    if report['rustsec_archive']['status']=='MATCHED_IMMUTABLE_SNAPSHOT': report['rustsec_matches']=rustsec_matches(lock,rustsec_archive)
     report['limitations']=['No legal or trademark clearance; registry response is only a dated observation.','Advisory data does not establish absence of vulnerabilities.','License metadata and notice hashes are evidence, not interpretation of obligations.','Cargo entries unavailable locally remain UNKNOWN, including untested targets.','Transitive bundled components require separate review.']
     (output/'dependencies.json').write_text(json.dumps(report,indent=2,default=str)+'\n')
     return report
