@@ -9,6 +9,7 @@ from pathlib import Path
 import platform
 import re
 import os
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -61,7 +62,11 @@ def prepare_semver_helper(root, output, lock=None):
     target=output/'semver-build'
     home=output/'semver-home';cargo_home=output/'semver-cargo-home'
     home.mkdir();(cargo_home/'registry/cache').mkdir(parents=True)
-    host=Path.home();host_cache=host/'.cargo/registry/cache';archives={}
+    cargo_executable=shutil.which('cargo')
+    if cargo_executable is None: raise OSError('cargo unavailable')
+    source_cargo_home=Path(os.environ.get('CARGO_HOME',Path(cargo_executable).resolve().parent.parent))
+    rustup_home=Path(os.environ.get('RUSTUP_HOME',source_cargo_home.parent/'.rustup'))
+    host_cache=source_cargo_home/'registry/cache';archives={}
     for package in lock['package']:
         if package.get('source')!='registry+https://github.com/rust-lang/crates.io-index': continue
         key=package['name']+'-'+package['version'];matches=[]
@@ -71,14 +76,15 @@ def prepare_semver_helper(root, output, lock=None):
         source=matches[0];destination=cargo_home/'registry/cache'/source.parent.name/source.name
         destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(source.read_bytes())
         archives[key]={'sha256':package['checksum'],'source':package['source']}
-    index=host/'.cargo/registry/index'
+    index=source_cargo_home/'registry/index'
     if index.exists(): (cargo_home/'registry/index').symlink_to(index,target_is_directory=True)
     for directory in (root,*root.parents):
         if any((directory/'.cargo'/name).exists() for name in ('config','config.toml')): raise ValueError('unexpected ancestor Cargo override')
     blocked={'HOME','CARGO_HOME','RUSTUP_HOME','RUSTFLAGS','RUSTC_WRAPPER','CARGO_ENCODED_RUSTFLAGS','CARGO_TARGET_DIR','CC','CXX','AR','LD'}
     env={key:value for key,value in os.environ.items() if key not in blocked and not key.startswith('CARGO_TARGET_')}
     remap=f'--remap-path-prefix={root.resolve()}=/ordavyn-source --remap-path-prefix={cargo_home.resolve()}=/cargo-home'
-    env.update({'PATH':str(host/'.cargo/bin')+':/usr/local/bin:/usr/bin:/bin','HOME':str(home),'CARGO_HOME':str(cargo_home),'RUSTUP_HOME':str(host/'.rustup'),'RUSTUP_TOOLCHAIN':'1.98.1','CARGO_TARGET_DIR':str(target),'CARGO_NET_OFFLINE':'true','RUSTFLAGS':remap})
+    path=str(Path(cargo_executable).parent)+':'+env.get('PATH','/usr/local/bin:/usr/bin:/bin')
+    env.update({'PATH':path,'HOME':str(home),'CARGO_HOME':str(cargo_home),'RUSTUP_HOME':str(rustup_home),'RUSTUP_TOOLCHAIN':'1.98.1','CARGO_TARGET_DIR':str(target),'CARGO_NET_OFFLINE':'true','RUSTFLAGS':remap})
     subprocess.run(['cargo','+1.98.1','build','--locked','--offline','--example','audit_semver'],cwd=root/'implementation',env=env,check=True,timeout=300,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     helper=target/'debug/examples/audit_semver'
     if not helper.is_file() or helper.is_symlink(): raise ValueError('semver helper missing')
