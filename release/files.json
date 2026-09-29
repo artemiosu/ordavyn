@@ -1,0 +1,341 @@
+{
+  "schema": 1,
+  "files": {
+    ".gitattributes": {
+      "action": "include",
+      "reason": "Portable repository hygiene and privacy rules"
+    },
+    ".gitignore": {
+      "action": "include",
+      "reason": "Portable repository hygiene and privacy rules"
+    },
+    "AGENTS.md": {
+      "action": "include",
+      "reason": "Public repository operating rules, reviewed without private source titles"
+    },
+    "LICENSE": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "README.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/LOCAL-JOURNAL.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/LOCAL-LIFECYCLE.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/LOCAL-THREAT-MODEL.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/LOCAL-WIRE-V2.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/LOCAL-WIRE-V3.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/PROVENANCE.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/RELEASE-STATUS.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "docs/THIRD-PARTY.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/.gitignore": {
+      "action": "include",
+      "reason": "Portable repository hygiene and privacy rules"
+    },
+    "implementation/Cargo.lock": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/Cargo.toml": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/LICENSE": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/README.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/TUTORIAL.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/demo/demo_ecommerce.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/demo/demo_multi.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/Cargo.toml": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/LICENSE": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/examples/interop_peer.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/examples/journal_peer.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/aim.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/cbor_encoding.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/cbor_tags.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/crypto.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/error.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/journal.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/json.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/lib.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/message.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/security.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/tls.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/transport.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/src/wire.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/tests/exchange.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/tests/interop.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/tests/journal.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/tests/lifecycle.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/ordavyn-core/tests/security.rs": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/LICENSE": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/MANIFEST.in": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/README.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/__init__.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/aim.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/client.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/crypto.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/fastapi_integration.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/journal.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/message.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/security.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/server.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/tls.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/ordavyn/wire.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/pyproject.toml": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/requirements.txt": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/tests/test_interop.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/tests/test_interop_harness.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/tests/test_journal.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/tests/test_lifecycle.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/tests/test_review_regressions.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/tests/test_sdk.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/python-sdk/tests/test_security.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/rust-toolchain.toml": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/tests/fixtures/README.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/tests/fixtures/wire-v2.json": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/tests/fixtures/wire-v3.json": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/tests/test_authenticated_exchange.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/tests/test_conformance.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/tests/test_interop.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "implementation/tests/test_journal_recovery.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "release/README.md": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "release/files.json": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "release/verification-requirements.txt": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "tools/audit_dependencies.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "tools/release_candidate.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "tools/tests/test_release_candidate.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "tools/tests/test_release_evidence.py": {
+      "action": "include",
+      "reason": "Negative package and evidence regression tests"
+    },
+    "tools/verify_candidate.py": {
+      "action": "include",
+      "reason": "Reproducible local verification runner"
+    },
+    "tools/verify_guides.py": {
+      "action": "include",
+      "reason": "Reproducible local verification runner"
+    },
+    "tools/verify_packages.py": {
+      "action": "include",
+      "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    }
+  }
+}

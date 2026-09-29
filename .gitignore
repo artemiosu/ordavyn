@@ -29,3 +29,8 @@
 *-journal
 *-wal
 *-shm
+
+# Unreviewed root source documents stay local, independent of local excludes.
+/*.md
+!/README.md
+!/AGENTS.md
