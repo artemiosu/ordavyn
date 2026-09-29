@@ -38,7 +38,7 @@ def safe_path(name):
 def inspect_content(name, data):
     safe_path(name)
     parts = name.lower().split('/')
-    if any(p.startswith('.') and p not in ('.gitignore', '.gitattributes') for p in parts) or any(p in ('_bmad', '_bmad-output', 'node_modules', '__pycache__') for p in parts):
+    if any(p.startswith('.') and p not in ('.gitignore', '.gitattributes', '.github') for p in parts) or any(p in ('_bmad', '_bmad-output', 'node_modules', '__pycache__') for p in parts):
         raise Rejected(f'private path: {name}')
     if re.search(r'\.(?:sqlite3?|db|pem|key|p12|pfx)$|(?:-wal|-shm|-journal)$', name, re.I):
         raise Rejected(f'key or journal path: {name}')

@@ -84,6 +84,12 @@ class CandidateTests(unittest.TestCase):
         for name, data in [('state.sqlite', b'x'), ('.private/data', b'x'), ('secret.txt', b'-----BEGIN '+b'PRIVATE KEY-----\nsecret')]:
             with self.subTest(name=name), self.assertRaises(rc.Rejected): rc.inspect_content(name, data)
 
+    def test_reviewed_github_path_is_public_but_other_hidden_paths_are_private(self):
+        rc.inspect_content('.github/workflows/ci.yml', b'name: CI\n')
+        for name in ('.github/.private/data', '.other/config.yml'):
+            with self.subTest(name=name), self.assertRaises(rc.Rejected):
+                rc.inspect_content(name, b'x')
+
     def test_paths(self):
         for path in ('../x', '/x', 'a/../x', 'a//x', './x', 'a\\x'):
             with self.subTest(path=path), self.assertRaises(rc.Rejected): rc.safe_path(path)
