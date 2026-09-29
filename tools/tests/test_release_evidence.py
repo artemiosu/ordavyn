@@ -110,6 +110,14 @@ class EvidenceTests(unittest.TestCase):
             wheel.write_bytes(wheel.read_bytes()+b'tampered')
             self.assertEqual(audit.python_wheel_evidence(lock,root,'demo','1.0.0')['status'],'UNKNOWN')
 
+    def test_environment_inventory_handles_builtin_extensions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env=runner.controlled_environment(Path(temp),Path(temp))
+            with patch.object(runner.subprocess,'check_output',side_effect=FileNotFoundError):
+                result=runner.environment_inventory(env)
+            self.assertIn('_ssl',result['runtime_extensions'])
+            self.assertEqual(result['binaries']['toolchain_rustc']['status'],'UNKNOWN')
+
     def test_installed_build_input_tampering(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);site=root/'site';site.mkdir();wheel=root/'demo.whl'

@@ -44,6 +44,10 @@ only a newly generated private result report records the candidate's fresh run.
   identifies `rustls-pemfile 2.2.0` as **unmaintained**. This is a maintenance
   advisory, not evidence of an exploit. It requires a separately reviewed
   dependency decision; this preparation does not update dependencies.
+- Eight additional locked-version RustSec advisory matches remain **UNKNOWN**
+  under the deliberately restricted stable full-version parser. They require
+  separate evaluation before release approval; results from the earlier matcher
+  do not establish that these versions are unaffected.
 - Dependency obligations, nested components and any future redistribution of
   compiled dependencies need review. See [third-party evidence](THIRD-PARTY.md).
   Missing evidence is UNKNOWN, never a clean bill of health.

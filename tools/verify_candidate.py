@@ -60,7 +60,7 @@ def environment_inventory(env):
     import ssl,sqlite3,_ssl,_sqlite3
     result={'hermetic':False,'settings':env,'python':sys.version,'ssl':ssl.OPENSSL_VERSION,
             'sqlite':sqlite3.sqlite_version,'platform':platform.platform(),'binaries':{}}
-    result['runtime_extensions']={module.__name__:{'path':module.__file__,'sha256':sha(Path(module.__file__).read_bytes())} for module in (_ssl,_sqlite3)}
+    result['runtime_extensions']={module.__name__:({'path':module.__file__,'sha256':sha(Path(module.__file__).read_bytes())} if getattr(module,'__file__',None) else {'status':'BUILTIN','interpreter_sha256':sha(Path(sys.executable).resolve().read_bytes())}) for module in (_ssl,_sqlite3)}
     for name in ('python','rustc','cargo','rustup','cc','ld','ar'):
         path=sys.executable if name=='python' else shutil.which(name,path=env['PATH'])
         try:

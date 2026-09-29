@@ -41,6 +41,11 @@ its vulnerability arrays were empty. The official RustSec database snapshot is
 including multiple versions of a crate. The relevant unresolved finding is
 [rustls-pemfile is unmaintained](https://rustsec.org/advisories/RUSTSEC-2025-0134.html).
 This is an informational maintenance advisory, not a demonstrated vulnerability.
+The stricter full-version matcher leaves **8 locked-version advisory matches UNKNOWN**
+because their ranges are outside its supported syntax; these have not been shown
+unaffected. It classifies 38 matches NOT_AFFECTED, one WITHDRAWN and the one
+maintenance finding BLOCKER. The immutable official archive bytes were freshly
+fetched and matched, with the same commit as official HEAD on 2026-09-29.
 Unsupported advisory syntax and inaccessible sources are UNKNOWN. A dated absence
 of matching vulnerability records is not a security guarantee. No automatic
 package update or new runtime requirement is introduced.
