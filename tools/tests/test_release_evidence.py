@@ -163,13 +163,14 @@ class EvidenceTests(unittest.TestCase):
                 helper=Path(env['CARGO_TARGET_DIR'])/'debug/examples/audit_semver';helper.parent.mkdir(parents=True);helper.write_text('#!/bin/sh\nprintf \'[{"matches":[true,false]}]\\n\'\n');helper.chmod(0o755)
                 source=Path(env['CARGO_HOME'])/'registry/src/index/semver-1.0.28';source.mkdir(parents=True);(source/'src.rs').write_bytes(b'from verified archive')
                 return subprocess.CompletedProcess(args,0)
-            with patch.object(audit.Path,'home',return_value=host),patch.object(audit.subprocess,'run',side_effect=build),patch.object(audit,'semver_matches',return_value=[[True,False]]):
+            controlled={'CARGO_HOME':str(host/'.cargo'),'RUSTUP_HOME':str(host/'.rustup')}
+            with patch.dict(audit.os.environ,controlled),patch.object(audit.subprocess,'run',side_effect=build),patch.object(audit,'semver_matches',return_value=[[True,False]]):
                 helper,evidence=audit.prepare_semver_helper(root,output,lock)
             self.assertTrue(helper.is_file())
             forged_digest=rc.sha(json.dumps([('src.rs',rc.sha(b'forged self-consistent source'))],separators=(',',':')).encode())
             self.assertNotEqual(evidence['extracted_source_sha256']['semver-1.0.28'],forged_digest)
             archive.unlink();empty=base/'empty';empty.mkdir()
-            with patch.object(audit.Path,'home',return_value=host),patch.object(audit.subprocess,'run',side_effect=build),patch.object(audit,'semver_matches',return_value=[[True,False]]):
+            with patch.dict(audit.os.environ,controlled),patch.object(audit.subprocess,'run',side_effect=build),patch.object(audit,'semver_matches',return_value=[[True,False]]):
                 with self.assertRaises(subprocess.CalledProcessError):audit.prepare_semver_helper(root,empty,lock)
             rows=audit.rustsec_matches({'package':[{'name':'demo','version':'1.0.0'}]},self._advisory_archive(base),None)
             self.assertTrue(all(row['status'] in ('UNKNOWN','WITHDRAWN') for row in rows))
