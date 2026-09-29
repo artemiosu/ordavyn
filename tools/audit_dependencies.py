@@ -292,8 +292,8 @@ def audit(root, output, online=False, download_cargo=False, wheelhouse=None):
         try:
             helper,helper_evidence=prepare_semver_helper(root,output,lock)
             report['binding']['semver_helper']=helper_evidence
-        except (OSError,ValueError,subprocess.CalledProcessError,subprocess.TimeoutExpired):
-            report['binding']['semver_helper']={'status':'UNKNOWN'}
+        except (OSError,ValueError,subprocess.CalledProcessError,subprocess.TimeoutExpired) as error:
+            report['binding']['semver_helper']={'status':'UNKNOWN','reason':type(error).__name__}
         report['rustsec_matches']=rustsec_matches(lock,rustsec_archive,helper)
     report['limitations']=['No legal or trademark clearance; registry response is only a dated observation.','Advisory data does not establish absence of vulnerabilities.','License metadata and notice hashes are evidence, not interpretation of obligations.','Cargo entries unavailable locally remain UNKNOWN, including untested targets.','Transitive bundled components require separate review.']
     (output/'dependencies.json').write_text(json.dumps(report,indent=2,default=str)+'\n')
