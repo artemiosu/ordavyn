@@ -107,6 +107,39 @@ class GithubPackageTests(unittest.TestCase):
         (self.root / "CONTRIBUTING.md").unlink()
         self.assert_rejected("CONTRIBUTING.md")
 
+    def test_rejects_rust_warmup_after_offline_suite(self):
+        path, data = self.workflow("ci.yml")
+        steps = data["jobs"]["verify"]["steps"]
+        warmup = steps.pop(3)
+        steps.insert(5, warmup)
+        path.write_text(json.dumps(data))
+        self.assert_rejected("locked Rust dependency warm-up order")
+
+    def test_rejects_missing_rust_warmup(self):
+        path, data = self.workflow("ci.yml")
+        del data["jobs"]["verify"]["steps"][3]
+        path.write_text(json.dumps(data))
+        self.assert_rejected("locked Rust dependency warm-up")
+
+    def test_rejects_duplicate_rust_warmup(self):
+        path, data = self.workflow("ci.yml")
+        steps = data["jobs"]["verify"]["steps"]
+        steps.insert(4, dict(steps[3]))
+        path.write_text(json.dumps(data))
+        self.assert_rejected("locked Rust dependency warm-up")
+
+    def test_rejects_duplicate_offline_command_replacing_other_required_command(self):
+        path, data = self.workflow("ci.yml")
+        steps = data["jobs"]["verify"]["steps"]
+        steps[5]["run"] = steps[8]["run"]
+        path.write_text(json.dumps(data))
+        self.assert_rejected("required offline command occurrences")
+
+    def test_rejects_security_policy_without_private_advisory_form(self):
+        path = self.root / "SECURITY.md"
+        path.write_text(path.read_text().replace("security/advisories/new", "issues/new"))
+        self.assert_rejected("security/advisories/new")
+
     def test_rejects_empty_issue_form(self):
         (self.root / ".github/ISSUE_TEMPLATE/bug.yml").write_text("{}")
         self.assert_rejected("top-level keys")

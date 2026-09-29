@@ -27,6 +27,11 @@ FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 CHECKOUT = "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
 SETUP_PYTHON = "actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c"
 CODEQL = "github/codeql-action/{action}@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
+RUST_FETCH = "cargo +1.98.1 fetch --manifest-path implementation/Cargo.toml --locked --target x86_64-unknown-linux-gnu"
+OFFLINE_RUST_COMMANDS = (
+    "cargo +1.98.1 test --manifest-path implementation/Cargo.toml --locked --offline",
+    "python tools/verify_guides.py --root .",
+)
 
 
 def _fail(path, field, value):
@@ -97,6 +102,20 @@ def _verify_workflow(root, relative):
             _fail(relative, f"jobs.{expected_job}.actions", references)
     if any(reference not in allowed for reference in references):
         _fail(relative, f"jobs.{expected_job}.actions", references)
+    if relative.endswith("ci.yml"):
+        steps = job["steps"]
+        warmups = [index for index, step in enumerate(steps) if step.get("run") == RUST_FETCH]
+        if len(warmups) != 1:
+            _fail(relative, "locked Rust dependency warm-up", warmups)
+        offline = {
+            command: [index for index, step in enumerate(steps) if step.get("run") == command]
+            for command in OFFLINE_RUST_COMMANDS
+        }
+        if any(len(indices) != 1 for indices in offline.values()):
+            _fail(relative, "required offline command occurrences", offline)
+        offline_indices = [indices[0] for indices in offline.values()]
+        if warmups[0] >= min(offline_indices):
+            _fail(relative, "locked Rust dependency warm-up order", {"warm-up": warmups[0], "offline": offline})
 
 
 def _verify_issue_forms(root):
@@ -159,7 +178,12 @@ def verify_github_package(root):
         _fail(".github/FUNDING.yml", "funding platform", "configured")
 
     security = (root / "SECURITY.md").read_text()
-    for required in ("No released version is currently supported", "No verified private vulnerability-reporting channel", "response SLA"):
+    for required in (
+        "No released version is currently supported",
+        "https://github.com/artemiosu/ordavyn/security/advisories/new",
+        "Do not publish sensitive vulnerability details in a public issue",
+        "No response SLA is promised",
+    ):
         if required not in security:
             raise ValueError(f"SECURITY.md: missing required limitation: {required}")
 

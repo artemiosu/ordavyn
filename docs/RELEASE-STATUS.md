@@ -56,9 +56,11 @@ sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
   HTTP 404 for `ordavyn` on PyPI and `ordavyn-core` on crates.io. No registration,
   name reservation, domain ownership or trademark right follows from this.
 - Public protocol specification, architectural acceptance, governance, a real
-  maintainer/security contact and disclosure process require owner decisions.
-  No contact identity or commitment is invented. Historical architecture approval
-  and private planning are not evidence that these conditions have been met.
+  maintainer identity and broader disclosure process require owner decisions.
+  GitHub Private Vulnerability Reporting is enabled for sensitive reports, without
+  a promised response SLA. No contact identity or commitment is invented.
+  Historical architecture approval and private planning are not evidence that
+  these conditions have been met.
 - Secret scans are bounded pattern checks with explicit public test fixtures;
   they are not proof that every possible secret or copied source was detected.
   Historical former names are kept in private reports; history is unchanged.
@@ -71,8 +73,9 @@ and local fail-closed workflow checks. CI runs the existing Rust, Python,
 interoperability, guide and repository-tool suites with read-only contents access.
 CodeQL is limited to Python and Rust and has only the additional
 `security-events: write` permission required to upload its result. The public
-[security policy](../SECURITY.md) records that no supported release, verified
-private reporting channel or response SLA exists.
+[security policy](../SECURITY.md) records that no release is supported and directs
+sensitive reports to GitHub Private Vulnerability Reporting without promising a
+response SLA.
 
 Verification evidence now binds both lock files and the dependency report to the
 source snapshot, and records hashes of the executing verifier modules. Rust builds

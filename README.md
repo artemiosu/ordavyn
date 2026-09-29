@@ -33,5 +33,6 @@ and the concrete release blockers before considering any distribution.
 Repository participation is described in [CONTRIBUTING.md](CONTRIBUTING.md),
 including local checks and compatibility expectations. Use the structured issue
 forms for defects and proposals. Read [SECURITY.md](SECURITY.md) before reporting
-a suspected vulnerability; no verified private reporting channel or response SLA
-exists yet. Candidate changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+a suspected vulnerability; sensitive reports use GitHub Private Vulnerability
+Reporting, with no promised response SLA. Candidate changes are recorded in
+[CHANGELOG.md](CHANGELOG.md).
