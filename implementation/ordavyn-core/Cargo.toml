@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-include = ["Cargo.toml", "LICENSE", "src/*.rs", "tests/*.rs", "examples/*.rs"]
+exclude = ["**/*.sqlite", "**/*.sqlite3", "**/*.db", "**/*-journal", "**/*-wal", "**/*-shm"]
 authors.workspace = true
 description = "Ordavyn core protocol library — AIM types, CBOR encoding, Ed25519 signing, message envelope"
 
