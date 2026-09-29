@@ -29,3 +29,9 @@ protocol pins, HTTP test mode without confidentiality and the threat model.
 The [local candidate procedure](release/README.md) records exact source/package
 contents and verification inputs. See [third-party evidence](docs/THIRD-PARTY.md)
 and the concrete release blockers before considering any distribution.
+
+Repository participation is described in [CONTRIBUTING.md](CONTRIBUTING.md),
+including local checks and compatibility expectations. Use the structured issue
+forms for defects and proposals. Read [SECURITY.md](SECURITY.md) before reporting
+a suspected vulnerability; no verified private reporting channel or response SLA
+exists yet. Candidate changes are recorded in [CHANGELOG.md](CHANGELOG.md).

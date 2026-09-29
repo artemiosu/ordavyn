@@ -1,0 +1,18 @@
+{
+  "name": "CodeQL",
+  "on": {"pull_request": null, "push": {"branches": ["main"]}, "schedule": [{"cron": "17 4 * * 1"}]},
+  "permissions": {"contents": "read"},
+  "jobs": {
+    "analyze": {
+      "runs-on": "ubuntu-24.04",
+      "permissions": {"contents": "read", "security-events": "write"},
+      "strategy": {"fail-fast": false, "matrix": {"language": ["python", "rust"]}},
+      "steps": [
+        {"uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", "with": {"persist-credentials": false}},
+        {"uses": "github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2", "with": {"languages": "${{ matrix.language }}"}},
+        {"uses": "github/codeql-action/autobuild@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"},
+        {"uses": "github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"}
+      ]
+    }
+  }
+}

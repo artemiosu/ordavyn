@@ -7,6 +7,18 @@ must have an explicit include/exclude classification. Ignored local materials ar
 not read by the exporter. New untracked nonignored or changed tracked files cause
 refusal. Output directories must not exist; choose new names for later runs.
 
+Before the heavier candidate procedure, validate public guides and the GitHub
+repository package locally:
+
+```sh
+python3 -m pytest -q tools/tests
+python3 tools/verify_guides.py --root .
+```
+
+The second command rejects missing community files, mutable Action references,
+unapproved write permissions, secret references and publication-capable triggers.
+It uses only the public checkout and does not publish or inspect private paths.
+
 The verification profile is Linux x86_64, CPython **3.13.15**, Rust **1.98.1**.
 The default `rust-toolchain.toml` remains unchanged; all verification commands
 explicitly select the pinned Rust version. Python runtime, build and development

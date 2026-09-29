@@ -1,0 +1,11 @@
+{
+  "name": "Change proposal",
+  "description": "Propose a scoped protocol, SDK, documentation, or verification change",
+  "title": "[Proposal] ",
+  "body": [
+    {"type": "textarea", "id": "problem", "attributes": {"label": "Problem", "description": "Describe the concrete problem without assuming a specific implementation."}, "validations": {"required": true}},
+    {"type": "textarea", "id": "scope", "attributes": {"label": "Proposed scope", "description": "Explain affected SDKs or wire behavior and how role-neutrality is preserved."}, "validations": {"required": true}},
+    {"type": "textarea", "id": "compatibility", "attributes": {"label": "Compatibility and risks", "description": "Note wire, API, security, replay, and migration effects."}, "validations": {"required": true}},
+    {"type": "textarea", "id": "verification", "attributes": {"label": "Verification", "description": "Describe tests or evidence that would demonstrate completion."}, "validations": {"required": true}}
+  ]
+}

@@ -9,9 +9,49 @@
       "action": "include",
       "reason": "Portable repository hygiene and privacy rules"
     },
+    ".github/FUNDING.yml": {
+      "action": "include",
+      "reason": "Public repository community and automation configuration"
+    },
+    ".github/ISSUE_TEMPLATE/bug.yml": {
+      "action": "include",
+      "reason": "Public repository community and automation configuration"
+    },
+    ".github/ISSUE_TEMPLATE/config.yml": {
+      "action": "include",
+      "reason": "Public repository community and automation configuration"
+    },
+    ".github/ISSUE_TEMPLATE/feature.yml": {
+      "action": "include",
+      "reason": "Public repository community and automation configuration"
+    },
+    ".github/pull_request_template.md": {
+      "action": "include",
+      "reason": "Public repository community and automation configuration"
+    },
+    ".github/workflows/ci.yml": {
+      "action": "include",
+      "reason": "Pinned, least-privilege repository verification workflow"
+    },
+    ".github/workflows/codeql.yml": {
+      "action": "include",
+      "reason": "Pinned, least-privilege security analysis workflow"
+    },
     "AGENTS.md": {
       "action": "include",
       "reason": "Public repository operating rules, reviewed without private source titles"
+    },
+    "CHANGELOG.md": {
+      "action": "include",
+      "reason": "Public community, security and candidate change guidance"
+    },
+    "CODE_OF_CONDUCT.md": {
+      "action": "include",
+      "reason": "Public community, security and candidate change guidance"
+    },
+    "CONTRIBUTING.md": {
+      "action": "include",
+      "reason": "Public community, security and candidate change guidance"
     },
     "LICENSE": {
       "action": "include",
@@ -20,6 +60,10 @@
     "README.md": {
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
+    },
+    "SECURITY.md": {
+      "action": "include",
+      "reason": "Public community, security and candidate change guidance"
     },
     "docs/LOCAL-JOURNAL.md": {
       "action": "include",
@@ -273,6 +317,10 @@
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
     },
+    "pytest.ini": {
+      "action": "include",
+      "reason": "Deterministic test collection for duplicate interoperability module names"
+    },
     "implementation/tests/fixtures/README.md": {
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
@@ -328,6 +376,10 @@
     "tools/tests/test_release_evidence.py": {
       "action": "include",
       "reason": "Negative package and evidence regression tests"
+    },
+    "tools/tests/test_verify_guides.py": {
+      "action": "include",
+      "reason": "Negative repository workflow safety regression tests"
     },
     "tools/verify_candidate.py": {
       "action": "include",

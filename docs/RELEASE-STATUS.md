@@ -66,6 +66,14 @@ sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
 Tests, review and package checks do not constitute a security audit, legal
 clearance, protocol certification or permission for production operations.
 
+The repository package adds pinned GitHub Actions, structured contribution forms
+and local fail-closed workflow checks. CI runs the existing Rust, Python,
+interoperability, guide and repository-tool suites with read-only contents access.
+CodeQL is limited to Python and Rust and has only the additional
+`security-events: write` permission required to upload its result. The public
+[security policy](../SECURITY.md) records that no supported release, verified
+private reporting channel or response SLA exists.
+
 Verification evidence now binds both lock files and the dependency report to the
 source snapshot, and records hashes of the executing verifier modules. Rust builds
 use fresh source extraction from lock-verified archives with an active Linux graph;
