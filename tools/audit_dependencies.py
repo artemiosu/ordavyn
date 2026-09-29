@@ -78,14 +78,15 @@ def prepare_semver_helper(root, output, lock=None):
         archives[key]={'sha256':package['checksum'],'source':package['source']}
     index=source_cargo_home/'registry/index'
     if index.exists(): (cargo_home/'registry/index').symlink_to(index,target_is_directory=True)
-    for directory in (root,*root.parents):
+    cargo_cwd=root/'implementation'
+    for directory in (cargo_cwd,*cargo_cwd.parents):
         if any((directory/'.cargo'/name).exists() for name in ('config','config.toml')): raise ValueError('unexpected ancestor Cargo override')
     blocked={'HOME','CARGO_HOME','RUSTUP_HOME','RUSTFLAGS','RUSTC_WRAPPER','CARGO_ENCODED_RUSTFLAGS','CARGO_TARGET_DIR','CC','CXX','AR','LD'}
     env={key:value for key,value in os.environ.items() if key not in blocked and not key.startswith('CARGO_TARGET_')}
     remap=f'--remap-path-prefix={root.resolve()}=/ordavyn-source --remap-path-prefix={cargo_home.resolve()}=/cargo-home'
     path=str(Path(cargo_executable).parent)+':'+env.get('PATH','/usr/local/bin:/usr/bin:/bin')
     env.update({'PATH':path,'HOME':str(home),'CARGO_HOME':str(cargo_home),'RUSTUP_HOME':str(rustup_home),'RUSTUP_TOOLCHAIN':'1.98.1','CARGO_TARGET_DIR':str(target),'CARGO_NET_OFFLINE':'true','RUSTFLAGS':remap})
-    subprocess.run(['cargo','+1.98.1','build','--locked','--offline','--example','audit_semver'],cwd=root/'implementation',env=env,check=True,timeout=300,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    subprocess.run(['cargo','+1.98.1','build','--locked','--offline','--example','audit_semver'],cwd=cargo_cwd,env=env,check=True,timeout=300,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     helper=target/'debug/examples/audit_semver'
     if not helper.is_file() or helper.is_symlink(): raise ValueError('semver helper missing')
     canary=semver_matches(helper,[{'version':'1.2.3','requirements':['>=1.2.3','<1.2.3']}])

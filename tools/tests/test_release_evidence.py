@@ -132,6 +132,14 @@ class EvidenceTests(unittest.TestCase):
             helper.write_bytes(b'substituted')
             self.assertEqual(audit.semver_matches(helper,[{'version':'1.2.3','requirements':['>=1.2']}]),[None])
 
+    def test_helper_build_rejects_cargo_override_in_actual_working_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'implementation/.cargo').mkdir(parents=True)
+            (root/'implementation/.cargo/config.toml').write_text('[build]\nrustflags=[]\n')
+            output=root/'output';output.mkdir()
+            with self.assertRaisesRegex(ValueError,'Cargo override'):
+                audit.prepare_semver_helper(root,output,{'package':[]})
+
     def test_audit_resolves_relative_controlled_paths_before_changing_cwd(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
             root=Path(temp);(root/'implementation').mkdir();(root/'release').mkdir()
@@ -290,6 +298,22 @@ class EvidenceTests(unittest.TestCase):
             row['status']='BLOCKER';report.write_text(json.dumps({'rustsec_matches':[row]}))
             with self.assertRaisesRegex(rc.Rejected,'result mismatch'):
                 runner.verify_semver_results(helper,report,os.environ)
+
+    def test_invalid_semver_inputs_remain_unknown_during_audit_and_reproduction(self):
+        project=Path(__file__).parents[2]
+        subprocess.run(['cargo','+1.98.1','build','--locked','--offline','--example','audit_semver'],cwd=project/'implementation',check=True)
+        helper=project/'implementation/target/debug/examples/audit_semver'
+        with tempfile.TemporaryDirectory() as temp:
+            base=Path(temp);archive=base/'invalid-semver.tar.gz'
+            with tarfile.open(archive,'w:gz') as target:
+                for ident,requirement,withdrawn in (('invalid-requirement','not a requirement',False),('withdrawn-invalid','also invalid',True)):
+                    text='```toml\n[advisory]\nid="'+ident+'"\npackage="demo"\n'+('withdrawn="2026-01-01"\n' if withdrawn else '')+'[versions]\npatched=["'+requirement+'"]\n```\n'
+                    data=text.encode();item=tarfile.TarInfo('db/crates/demo/'+ident+'.md');item.size=len(data);target.addfile(item,io.BytesIO(data))
+            rows=audit.rustsec_matches({'package':[{'name':'demo','version':'invalid-version'}]},archive,helper)
+            statuses={row['id']:row['status'] for row in rows}
+            self.assertEqual(statuses,{'invalid-requirement':'UNKNOWN','withdrawn-invalid':'WITHDRAWN'})
+            report=base/'report.json';report.write_text(json.dumps({'rustsec_matches':rows}))
+            self.assertEqual(runner.verify_semver_results(helper,report,os.environ),{'rows':2,'status':'REPRODUCED'})
 
     def test_verifier_rejects_malformed_helper_response(self):
         row={'package':'demo','version':'1.2.3','id':'TEST','status':'NOT_AFFECTED','advisory':{'advisory':{'id':'TEST','package':'demo'},'versions':{'patched':['>=1.2.3'],'unaffected':[]}}}

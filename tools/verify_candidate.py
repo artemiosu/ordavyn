@@ -111,9 +111,13 @@ def verify_semver_results(helper, report_path, env):
             expected='UNKNOWN'
         else:
             answer=next(iterator);matches=answer.get('matches') if isinstance(answer,dict) else None
-            if not isinstance(matches,list) or len(matches)!=len(query['requirements']) or any(type(value) is not bool for value in matches):
+            helper_error=isinstance(answer,dict) and isinstance(answer.get('error'),str) and set(answer)=={'error'}
+            if helper_error:
+                expected='WITHDRAWN' if row['advisory']['advisory'].get('withdrawn') else 'UNKNOWN'
+            elif not isinstance(matches,list) or len(matches)!=len(query['requirements']) or any(type(value) is not bool for value in matches):
                 raise Rejected('dependency report RustSec helper response mismatch')
-            expected='WITHDRAWN' if row['advisory']['advisory'].get('withdrawn') else 'NOT_AFFECTED' if True in matches else 'BLOCKER'
+            else:
+                expected='WITHDRAWN' if row['advisory']['advisory'].get('withdrawn') else 'NOT_AFFECTED' if True in matches else 'BLOCKER'
         if row.get('status')!=expected: raise Rejected('dependency report RustSec result mismatch')
     return {'rows':len(rows),'status':'REPRODUCED'}
 
