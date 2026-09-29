@@ -33,9 +33,9 @@ and environment. The full evidence remains local and private. Success applies
 only to the recorded artifacts and Linux x86_64 environment, not other platforms.
 Wheel bit-for-bit reproducibility is not claimed.
 
-The previous wire v3 baseline passed 96 Rust tests and 249 SDK +35 recovery +119
-TLS/response checks in each package installation. These are historical counts;
-only a newly generated private result report records the candidate's fresh run.
+The reviewed candidate's private result records 97 Rust and 55 verification-tool
+tests, plus 249 SDK and 159 recovery/TLS checks for each independent wheel and
+sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
 
 ## Remaining decisions and blockers
 
@@ -43,9 +43,9 @@ only a newly generated private result report records the candidate's fresh run.
 - The unmaintained `rustls-pemfile 2.2.0` wrapper has been removed. The existing
   `rustls-pki-types` dependency now parses PEM without changing the public TLS API.
   RustSec conditions use pinned Rust `semver 1.0.28`; invalid data or helper failure
-  remains UNKNOWN. The recorded official snapshot now evaluates to 46 NOT_AFFECTED,
-  one WITHDRAWN, no UNKNOWN and no BLOCKER. The final candidate still requires a
-  fresh official audit tied to its exact commit.
+  remains UNKNOWN. The fresh official snapshot evaluates to 46 NOT_AFFECTED and
+  one WITHDRAWN, with no UNKNOWN or BLOCKER; the private verifier independently
+  reproduced all 47 rows with the same helper binary hash.
 - Dependency obligations, nested components and any future redistribution of
   compiled dependencies need review. See [third-party evidence](THIRD-PARTY.md).
   Missing evidence is UNKNOWN, never a clean bill of health.

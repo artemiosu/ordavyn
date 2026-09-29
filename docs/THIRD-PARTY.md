@@ -42,10 +42,10 @@ including multiple versions of a crate. The unsupported `rustls-pemfile` wrapper
 has been removed; PEM parsing uses the already present `rustls-pki-types` API.
 RustSec conditions are evaluated by pinned Rust `semver 1.0.28`, with source and
 helper hashes recorded in private evidence. Invalid conditions, invalid versions,
-helper failures and inaccessible sources remain UNKNOWN. A fresh final audit tied
-to the exact candidate must replace the earlier evidence binding. Against the
-recorded official snapshot, the new matcher classifies 46 matches NOT_AFFECTED
-and one withdrawn informational advisory WITHDRAWN, with no UNKNOWN or BLOCKER.
+helper failures and inaccessible sources remain UNKNOWN. The reviewed candidate's
+fresh private audit and independent verifier both classify 46 matches
+NOT_AFFECTED and one withdrawn informational advisory WITHDRAWN, with no UNKNOWN
+or BLOCKER; both record the same helper binary hash.
 A dated absence of matching
 vulnerability records is not a security guarantee. No new runtime requirement is
 introduced.
