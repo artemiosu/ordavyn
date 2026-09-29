@@ -28,7 +28,10 @@ CHECKOUT = "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
 SETUP_PYTHON = "actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c"
 CODEQL = "github/codeql-action/{action}@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
 RUST_FETCH = "cargo +1.98.1 fetch --manifest-path implementation/Cargo.toml --locked --target x86_64-unknown-linux-gnu"
+RUST_EXAMPLES = "cargo +1.98.1 build --manifest-path implementation/Cargo.toml --examples --locked --offline"
+PYTHON_INTEROP = "python -m pytest -q implementation/python-sdk/tests implementation/tests"
 OFFLINE_RUST_COMMANDS = (
+    "python -m unittest discover -s tools/tests -v",
     "cargo +1.98.1 test --manifest-path implementation/Cargo.toml --locked --offline",
     "python tools/verify_guides.py --root .",
 )
@@ -116,6 +119,16 @@ def _verify_workflow(root, relative):
         offline_indices = [indices[0] for indices in offline.values()]
         if warmups[0] >= min(offline_indices):
             _fail(relative, "locked Rust dependency warm-up order", {"warm-up": warmups[0], "offline": offline})
+        example_builds = [index for index, step in enumerate(steps) if step.get("run") == RUST_EXAMPLES]
+        python_interop = [index for index, step in enumerate(steps) if step.get("run") == PYTHON_INTEROP]
+        if len(example_builds) != 1:
+            _fail(relative, "locked offline Rust examples build", example_builds)
+        if len(python_interop) != 1 or not warmups[0] < example_builds[0] < python_interop[0]:
+            _fail(
+                relative,
+                "locked offline Rust examples build order",
+                {"warm-up": warmups[0], "examples": example_builds[0], "python interoperability": python_interop},
+            )
 
 
 def _verify_issue_forms(root):

@@ -111,6 +111,14 @@ class GithubPackageTests(unittest.TestCase):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
         warmup = steps.pop(3)
+        steps.insert(7, warmup)
+        path.write_text(json.dumps(data))
+        self.assert_rejected("locked Rust dependency warm-up order")
+
+    def test_rejects_rust_warmup_after_repository_checks(self):
+        path, data = self.workflow("ci.yml")
+        steps = data["jobs"]["verify"]["steps"]
+        warmup = steps.pop(3)
         steps.insert(5, warmup)
         path.write_text(json.dumps(data))
         self.assert_rejected("locked Rust dependency warm-up order")
@@ -131,9 +139,31 @@ class GithubPackageTests(unittest.TestCase):
     def test_rejects_duplicate_offline_command_replacing_other_required_command(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        steps[5]["run"] = steps[8]["run"]
+        steps[6]["run"] = steps[9]["run"]
         path.write_text(json.dumps(data))
         self.assert_rejected("required offline command occurrences")
+
+    def test_rejects_missing_rust_examples_build(self):
+        path, data = self.workflow("ci.yml")
+        steps = data["jobs"]["verify"]["steps"]
+        del steps[4]
+        path.write_text(json.dumps(data))
+        self.assert_rejected("locked offline Rust examples build")
+
+    def test_rejects_duplicate_rust_examples_build(self):
+        path, data = self.workflow("ci.yml")
+        steps = data["jobs"]["verify"]["steps"]
+        steps.insert(5, dict(steps[4]))
+        path.write_text(json.dumps(data))
+        self.assert_rejected("locked offline Rust examples build")
+
+    def test_rejects_rust_examples_build_after_python_interoperability(self):
+        path, data = self.workflow("ci.yml")
+        steps = data["jobs"]["verify"]["steps"]
+        example_build = steps.pop(4)
+        steps.insert(7, example_build)
+        path.write_text(json.dumps(data))
+        self.assert_rejected("locked offline Rust examples build order")
 
     def test_rejects_security_policy_without_private_advisory_form(self):
         path = self.root / "SECURITY.md"
