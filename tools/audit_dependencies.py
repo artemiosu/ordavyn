@@ -106,29 +106,36 @@ def locked_wheels(lock_path,wheelhouse):
         if not match: raise ValueError('invalid hash lock')
         name,version,hashes=match.groups()
         locked[normalize(name)]={'name':name,'version':version,'hashes':re.findall(r'--hash=sha256:([a-f0-9]{64})',hashes)}
-    found={}
+    found={};unusable=set();seen=set()
     for path in sorted(Path(wheelhouse).glob('*.whl')) if wheelhouse else []:
-        checksum=digest(path.read_bytes())
-        # Do not parse untrusted wheel metadata until a lock digest matches.
-        candidates=[n for n,v in locked.items() if checksum in v['hashes']]
-        if len(candidates)!=1: continue
-        with zipfile.ZipFile(path) as archive:
-            names=archive.namelist()
-            if len(names)!=len(set(names)): continue
-            metadata=[n for n in names if n.endswith('.dist-info/METADATA') and n.count('/')==1]
-            if len(metadata)!=1: continue
-            meta=BytesParser().parsebytes(archive.read(metadata[0]))
-            name=normalize(meta['Name']);version=meta['Version']
-            if name!=candidates[0] or version!=locked[name]['version']: continue
-            entry={'name':meta['Name'],'version':version,'wheel':str(path.resolve()),'wheel_sha256':checksum,
-                   'status':'HASH_VERIFIED_WHEEL','requires_dist':meta.get_all('Requires-Dist',[]),
-                   'license_expression':meta.get('License-Expression'),'legacy_license':meta.get('License'),'notices':[]}
-            for member in names:
-                if re.search(r'(?i)(licen[cs]e|copying|notice|copyright)',member):
-                    entry['notices'].append({'path':member,'sha256':digest(archive.read(member))})
-            if name in found: raise ValueError('multiple locked wheels for one component; select one platform')
-            found[name]=entry
-    return locked,found
+        candidates=[]
+        try:
+            checksum=digest(path.read_bytes())
+            # Do not parse untrusted wheel metadata until a lock digest matches.
+            candidates=[n for n,v in locked.items() if checksum in v['hashes']]
+            if len(candidates)!=1:
+                unusable.update(candidates);continue
+            if candidates[0] in seen or candidates[0] in unusable:
+                unusable.add(candidates[0]);found.pop(candidates[0],None);continue
+            seen.add(candidates[0])
+            with zipfile.ZipFile(path) as archive:
+                names=archive.namelist()
+                if len(names)!=len(set(names)): continue
+                metadata=[n for n in names if n.endswith('.dist-info/METADATA') and n.count('/')==1]
+                if len(metadata)!=1: continue
+                meta=BytesParser().parsebytes(archive.read(metadata[0]))
+                name=normalize(meta['Name']);version=meta['Version']
+                if name!=candidates[0] or version!=locked[name]['version']: continue
+                entry={'name':meta['Name'],'version':version,'wheel':str(path.resolve()),'wheel_sha256':checksum,
+                       'status':'HASH_VERIFIED_WHEEL','requires_dist':meta.get_all('Requires-Dist',[]),
+                       'license_expression':meta.get('License-Expression'),'legacy_license':meta.get('License'),'notices':[]}
+                for member in names:
+                    if re.search(r'(?i)(licen[cs]e|copying|notice|copyright)',member):
+                        entry['notices'].append({'path':member,'sha256':digest(archive.read(member))})
+                found[name]=entry
+        except (OSError,ValueError,KeyError,TypeError,zipfile.BadZipFile,RuntimeError,EOFError):
+            unusable.update(candidates)
+    return locked,{name:entry for name,entry in found.items() if name not in unusable}
 
 
 def python_wheel_evidence(lock_path,wheelhouse,name,version):

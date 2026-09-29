@@ -131,6 +131,7 @@ class EvidenceTests(unittest.TestCase):
             with patch.object(runner.subprocess,'check_output',side_effect=FileNotFoundError):
                 result=runner.environment_inventory(env)
             self.assertIn('_ssl',result['runtime_extensions'])
+            self.assertIn('not a complete binary dependency inventory',result['limitations'][0])
             self.assertEqual(result['binaries']['toolchain_rustc']['status'],'UNKNOWN')
 
     def test_installed_build_input_tampering(self):
@@ -196,6 +197,8 @@ class EvidenceTests(unittest.TestCase):
             report=root/'report';report.write_text(json.dumps({'binding':binding}))
             with patch.object(runner,'git',side_effect=lambda repo,command,ref:files[ref.split(':',1)[1]]):
                 self.assertEqual(runner.dependency_binding(root,report,'.','b'*40)['lock_binding'],'IDENTICAL_LOCK_BYTES_OTHER_COMMIT')
+                with patch.object(runner,'git',side_effect=lambda repo,command,ref: b'changed auditor' if ref=='b'*40+':tools/audit_dependencies.py' else files[ref.split(':',1)[1]]):
+                    with self.assertRaisesRegex(rc.Rejected,'producer mismatch'):runner.dependency_binding(root,report,'.','b'*40)
                 binding['locks']['implementation/Cargo.lock']='0'*64;report.write_text(json.dumps({'binding':binding}))
                 with self.assertRaisesRegex(rc.Rejected,'lock mismatch'):runner.dependency_binding(root,report,'.','b'*40)
                 binding['locks']['implementation/Cargo.lock']=rc.sha(b'cargo');binding['producer']={};report.write_text(json.dumps({'binding':binding}))
@@ -210,6 +213,68 @@ class EvidenceTests(unittest.TestCase):
             with patch.object(runner.subprocess,'check_output',return_value=str(site).encode()):
                 with self.assertRaisesRegex(rc.Rejected,'installed wheel bytes mismatch: ordavyn'):
                     runner.installed_inputs('python',{'ordavyn':{'wheel':str(wheel),'wheel_sha256':rc.sha(wheel.read_bytes())}},{})
+
+    def test_ambiguous_and_unreadable_wheels_preserve_partial_audit(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'implementation').mkdir();(root/'release').mkdir()
+            (root/'implementation/Cargo.lock').write_text('package=[]')
+            lines=[]
+            for name in ('demo','valid','broken','unreadable'):
+                wheel=root/(name+'.whl')
+                if name=='broken': wheel.write_bytes(b'invalid zip')
+                else:
+                    with zipfile.ZipFile(wheel,'w') as archive:
+                        archive.writestr(name+'-1.0.0.dist-info/METADATA','Name: '+name+'\nVersion: 1.0.0\n')
+                lines.append(name+'==1.0.0 --hash=sha256:'+rc.sha(wheel.read_bytes()))
+            shutil.copyfile(root/'demo.whl',root/'demo-copy.whl')
+            (root/'release/verification-requirements.txt').write_text('\n'.join(lines)+'\n')
+            original=Path.read_bytes
+            def read(path):
+                if path.name=='unreadable.whl': raise PermissionError('fixture')
+                return original(path)
+            with patch.object(Path,'read_bytes',read),patch.object(audit,'PUBLIC_PYTHON',{n:'1.0.0' for n in ('demo','valid','broken','unreadable')}),patch.object(audit.subprocess,'check_output',side_effect=FileNotFoundError):
+                locked,found=audit.locked_wheels(root/'release/verification-requirements.txt',root)
+                self.assertEqual(set(found),{'valid'})
+                report=audit.audit(root,root/'out',wheelhouse=root)
+            self.assertEqual({e['name']:e['status'] for e in report['python']},{'demo':'UNKNOWN','valid':'HASH_VERIFIED_WHEEL','broken':'UNKNOWN','unreadable':'UNKNOWN'})
+            self.assertTrue((root/'out/dependencies.json').exists())
+
+    def test_runner_rejects_own_payload_tamper_in_each_installation(self):
+        from contextlib import ExitStack
+        for damaged in ('wheel','sdist'):
+            with self.subTest(installation=damaged),tempfile.TemporaryDirectory() as temp:
+                base=Path(temp);root=base/'source';root.mkdir();output=base/'output'
+                readme=root/'implementation/python-sdk/README.md';readme.parent.mkdir(parents=True);readme.write_text('```python\npass\n```')
+                lock=root/'release/verification-requirements.txt';lock.parent.mkdir();lock.write_text('fixture')
+                entries=[{'path':str(p.relative_to(root)),'sha256':rc.sha(p.read_bytes()),'mode':'0644'} for p in (readme,lock)]
+                for p in (readme,lock): p.chmod(0o644)
+                manifest=base/'manifest.json';manifest.write_text(json.dumps({'files':entries}))
+                installed=[]
+                def command(args,**kwargs):
+                    if 'build' in args and '--outdir' in args:
+                        packages=Path(args[args.index('--outdir')+1]);packages.mkdir()
+                        with zipfile.ZipFile(packages/'ordavyn-0.1.0-py3-none-any.whl','w') as archive: archive.writestr('ordavyn/client.py',b'original')
+                        (packages/'ordavyn-0.1.0.tar.gz').write_bytes(b'sdist fixture')
+                    if '--no-build-isolation' in args:
+                        kind=Path(args[0]).parents[1].name;installed.append(kind)
+                        site=output/kind/'site/ordavyn';site.mkdir(parents=True)
+                        (site/'client.py').write_bytes(b'tampered' if kind==damaged else b'original')
+                    return subprocess.CompletedProcess(args,0)
+                def site_query(args,**kwargs):
+                    return str(Path(args[0]).parents[1]/'site').encode()
+                with ExitStack() as stack:
+                    for name,value in {'bind_source':('a'*40,'b'*64),'producer_binding':{},'dependency_binding':{},'locked_wheels':({},{}),'prepare_rust_inputs':{},'environment_inventory':{},'verify':{},'suite_summary':None}.items():
+                        stack.enter_context(patch.object(runner,name,return_value=value))
+                    stack.enter_context(patch.object(runner.sys,'version_info',(3,13,15)))
+                    stack.enter_context(patch.object(runner.platform,'system',return_value='Linux'))
+                    stack.enter_context(patch.object(runner.platform,'machine',return_value='x86_64'))
+                    stack.enter_context(patch.object(runner.platform,'platform',return_value='test platform'))
+                    stack.enter_context(patch.object(runner.subprocess,'run',side_effect=command))
+                    stack.enter_context(patch.object(runner.subprocess,'check_output',side_effect=site_query))
+                    with self.assertRaisesRegex(rc.Rejected,'installed wheel bytes mismatch: ordavyn'):
+                        runner.run_verification(root,manifest,output,base)
+                self.assertEqual(installed,['wheel'] if damaged=='wheel' else ['wheel','sdist'])
+                self.assertFalse((output/'result.json').exists())
 
     def test_rust_inputs_use_verified_archive_and_fresh_source(self):
         with tempfile.TemporaryDirectory() as temp:

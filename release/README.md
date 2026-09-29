@@ -61,6 +61,35 @@ are retained. RustSec matching can additionally read the separately fetched
 `.ordavyn-private/release-candidate/rustsec.tar.gz`; record its official URL, commit
 and SHA-256 in `rustsec.tar.json` alongside it. Online audit fetches the immutable official URL and compares response bytes with
 the archive; only then can a freshly fetched matching HEAD establish freshness.
+Prepare the reviewed immutable snapshot before the online audit. This example
+writes only to a local private directory; it neither publishes nor changes Git:
+
+```sh
+python3 - <<'PYTHON'
+from pathlib import Path
+import hashlib, json, urllib.request
+commit = "f23b768236fe2880e4cfa167da662cad8ca79240"
+url = "https://api.github.com/repos/RustSec/advisory-db/tarball/" + commit
+output = Path(".ordavyn-private/release-candidate")
+output.mkdir(parents=True, exist_ok=True)
+# These exclusive writes preserve any previous evidence. Use a fresh workspace
+# or retain the already reviewed files when they already exist.
+with urllib.request.urlopen(url, timeout=30) as response:
+    archive = response.read()
+with (output / "rustsec.tar.gz").open("xb") as target:
+    target.write(archive)
+with (output / "rustsec.tar.json").open("x") as target:
+    json.dump({"url": url, "commit": commit,
+               "sha256": hashlib.sha256(archive).hexdigest()}, target, indent=2)
+PYTHON
+```
+
+The explicit URL is the official RustSec GitHub repository at the reviewed commit.
+If the download is unavailable, retain the failure and run the audit with missing
+evidence: its RustSec status remains UNKNOWN. The example does not assert that
+this snapshot is still current; the online audit separately compares official
+archive bytes and current HEAD.
+
 Offline sidecars are LOCAL_DECLARATION with UNKNOWN freshness, even when their
 self-declared hash and commit agree. A fetched index alone is not an advisory scan. The
 limited matcher accepts only stable full x.y.z comparisons and returns UNKNOWN
@@ -118,7 +147,8 @@ Commit the reviewed tools and locks before generating fresh dependency evidence.
 The required dependency report carries its source commit, both lock hashes and
 audit producer hash. The runner verifies these against Git and binds its report
 hash to the result. Evidence from another commit is explicitly identified and
-accepted only with identical lock bytes and a verified producer. Executing
+accepted only with identical lock bytes and an auditor hash matching both
+commits. Executing
 verifier modules must match the chosen source commit. Each Ordavyn installation
 records the requested wheel or sdist digest and compares installed payload bytes
 with the already verified reference wheel. Public Python allowlist drift blocks

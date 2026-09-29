@@ -77,7 +77,8 @@ def dependency_binding(root,report_path,repo,commit):
     for name,digest in locks.items():
         if sha(git(repo,'show',evidence_commit+':'+name))!=digest: raise Rejected('dependency report source lock mismatch')
     expected={'tools/audit_dependencies.py':sha(git(repo,'show',evidence_commit+':tools/audit_dependencies.py'))}
-    if binding.get('producer')!=expected: raise Rejected('dependency report producer mismatch')
+    selected={'tools/audit_dependencies.py':sha(git(repo,'show',commit+':tools/audit_dependencies.py'))}
+    if binding.get('producer')!=expected or expected!=selected: raise Rejected('dependency report producer mismatch')
     return {'sha256':sha(raw),'source_commit':evidence_commit,'lock_binding':'SAME_COMMIT' if evidence_commit==commit else 'IDENTICAL_LOCK_BYTES_OTHER_COMMIT','locks':locks}
 
 
@@ -119,7 +120,8 @@ def prepare_rust_inputs(root,env):
 def environment_inventory(env):
     import ssl,sqlite3,_ssl,_sqlite3
     result={'hermetic':False,'settings':env,'python':sys.version,'ssl':ssl.OPENSSL_VERSION,
-            'sqlite':sqlite3.sqlite_version,'platform':platform.platform(),'binaries':{}}
+            'sqlite':sqlite3.sqlite_version,'platform':platform.platform(),'binaries':{},
+            'limitations':['Dynamically loaded system libraries are host prerequisites; this report does not enumerate or hash every loaded library and is not a complete binary dependency inventory.']}
     result['runtime_extensions']={module.__name__:({'path':module.__file__,'sha256':sha(Path(module.__file__).read_bytes())} if getattr(module,'__file__',None) else {'status':'BUILTIN','interpreter_sha256':sha(Path(sys.executable).resolve().read_bytes())}) for module in (_ssl,_sqlite3)}
     for name in ('python','rustc','cargo','rustup','cc','ld','ar'):
         path=sys.executable if name=='python' else shutil.which(name,path=env['PATH'])
