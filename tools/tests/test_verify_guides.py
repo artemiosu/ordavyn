@@ -1,9 +1,11 @@
 import json
 import importlib.util
+import io
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("verify_guides", PROJECT_ROOT / "tools/verify_guides.py")
@@ -35,7 +37,8 @@ class GithubPackageTests(unittest.TestCase):
             verify_github_package(self.root)
 
     def test_accepts_checked_in_package(self):
-        verify_github_package(self.root)
+        with redirect_stdout(io.StringIO()):
+            verify_github_package(self.root)
 
     def test_rejects_missing_permissions(self):
         path, data = self.workflow("ci.yml")
