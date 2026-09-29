@@ -161,7 +161,7 @@ class PackageMutationTests(unittest.TestCase):
     def write(self):
         with zipfile.ZipFile(self.wheel,'w') as z:
             for name,data in self.wheel_data.items():
-                item=zipfile.ZipInfo(name);item.external_attr=(0o100644<<16);z.writestr(item,data)
+                item=zipfile.ZipInfo(name);item.external_attr=((0o100664 if name.endswith('.dist-info/RECORD') else 0o100644)<<16);z.writestr(item,data)
         with tarfile.open(self.sdist,'w:gz') as t:
             for name,data in self.sdist_data.items():
                 item=tarfile.TarInfo(name);item.size=len(data);t.addfile(item,io.BytesIO(data))
@@ -193,6 +193,12 @@ class PackageMutationTests(unittest.TestCase):
         with zipfile.ZipFile(self.wheel,'w') as archive:
             for name,data in self.wheel_data.items():
                 item=zipfile.ZipInfo(name);item.external_attr=0o100666<<16;archive.writestr(item,data)
+        with self.assertRaises(rc.Rejected):self.verify()
+
+    def test_record_permission_is_exact(self):
+        with zipfile.ZipFile(self.wheel,'w') as archive:
+            for name,data in self.wheel_data.items():
+                item=zipfile.ZipInfo(name);item.external_attr=0o100644<<16;archive.writestr(item,data)
         with self.assertRaises(rc.Rejected):self.verify()
 
     def test_sdist_permissions_and_directory_mutation(self):

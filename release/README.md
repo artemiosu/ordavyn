@@ -99,7 +99,10 @@ automatically created environment inventory are hash-linked in result.json.
 Environment evidence includes interpreter/toolchain binary paths, SHA-256 and
 versions, SSL/SQLite versions and extension hashes, plus allowed settings.
 
-Wheel/sdist file permissions must be 0644 and directory permissions 0755.
+Wheel/sdist source and generated file permissions must be 0644 and directory
+permissions 0755, with one exact exception: the pinned wheel writer explicitly
+sets `ordavyn-0.1.0.dist-info/RECORD` to 0664 regardless of umask. That path must
+have exactly 0664; the exception does not apply to any other archive member.
 Verification records each archive member's mode, size and SHA-256. Separate command
 logs establish 96 Rust tests and 249 SDK plus 154 recovery/TLS tests in each package
 installation; skipped, ignored or filtered suites cannot produce TESTS_PASS.

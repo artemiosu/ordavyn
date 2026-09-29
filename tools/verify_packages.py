@@ -47,8 +47,9 @@ def verify(root, wheel, sdist):
     if set(sdist_data)!=set(expected_sdist):raise Rejected('sdist member list mismatch')
     for name,data in expected_sdist.items():
         if sdist_data[name]!=data:raise Rejected('sdist content mismatch: '+name)
-    for modes,contents in ((wheel_modes,wheel_data),(sdist_modes,sdist_data)):
-        if any(modes[n]!=0o644 for n in contents): raise Rejected('unexpected package file permissions')
+    # The pinned wheel writer assigns RECORD 0664 explicitly, independent of umask.
+    for modes,contents,record in ((wheel_modes,wheel_data,prefix+'RECORD'),(sdist_modes,sdist_data,None)):
+        if any(modes[n]!=(0o664 if n==record else 0o644) for n in contents): raise Rejected('unexpected package file permissions')
         if any(mode!=0o755 for n,mode in modes.items() if n not in contents): raise Rejected('unexpected package directory permissions')
     return {str(p):{'sha256':sha(Path(p).read_bytes()),'files':{n:{'sha256':sha(d),'size':len(d),'mode':format(modes[n],'04o')} for n,d in sorted(contents.items())}} for p,contents,modes in ((wheel,wheel_data,wheel_modes),(sdist,sdist_data,sdist_modes))}
 
