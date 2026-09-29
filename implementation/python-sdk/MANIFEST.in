@@ -1,1 +1,17 @@
-global-exclude *.sqlite *.sqlite3 *.db *-journal *-wal *-shm
+global-exclude *
+include LICENSE
+include README.md
+include pyproject.toml
+include MANIFEST.in
+include requirements.txt
+include ordavyn/__init__.py
+include ordavyn/aim.py
+include ordavyn/client.py
+include ordavyn/crypto.py
+include ordavyn/fastapi_integration.py
+include ordavyn/journal.py
+include ordavyn/message.py
+include ordavyn/security.py
+include ordavyn/server.py
+include ordavyn/tls.py
+include ordavyn/wire.py

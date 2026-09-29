@@ -28,6 +28,6 @@ dependencies = [
     "cbor2==5.9.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["ordavyn*"]
+[tool.setuptools]
+packages = ["ordavyn"]
+include-package-data = false
