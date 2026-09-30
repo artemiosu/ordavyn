@@ -5,6 +5,13 @@ release on crates.io or PyPI, and no production support commitment. Cargo retain
 `publish = false` and Python retains `Private :: Do Not Upload`; these controls
 separate public source review from package publication.
 
+A local [Draft 0.1](../spec/README.md) and conformance map are prepared for the
+implemented profile but are not yet published as a release. Governance is
+documented as single-maintainer stewardship. DCO 1.1 applies only after
+`1fe370a0b64cbfa5a302c1a6a881f1d99a503c48`; external final-commit enforcement
+remains a release blocker. The repository verifier nevertheless checks that fixed
+baseline through a descendant proposed head on every CI run.
+
 ## Current capabilities
 
 The experimental wire v3 profile implements strict JSON and deterministic CBOR
@@ -56,8 +63,10 @@ sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
 - Registry observations on 2026-09-29 are time-limited: public endpoints returned
   HTTP 404 for `ordavyn` on PyPI and `ordavyn-core` on crates.io. No registration,
   name reservation, domain ownership or trademark right follows from this.
-- Public protocol specification, architectural acceptance, governance, a real
-  maintainer identity and broader disclosure process require owner decisions.
+- Publication/review of the prepared specification, architectural acceptance,
+  additional maintainers, external DCO final-commit enforcement, a reviewed
+  IPR/patent policy, a real identity beyond the GitHub profile, and broader
+  disclosure remain open.
   GitHub Private Vulnerability Reporting is enabled for sensitive reports, without
   a promised response SLA. No contact identity or commitment is invented.
   Historical architecture decisions are not evidence that these conditions have

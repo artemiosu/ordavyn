@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Execute documented snippets with disposable journals and TLS test certificates."""
 import argparse
+import ast
 import importlib.util
 import json
 import os
@@ -19,6 +20,8 @@ REQUIRED_GITHUB_FILES = {
     ".github/ISSUE_TEMPLATE/feature.yml",
     ".github/ISSUE_TEMPLATE/config.yml",
     ".github/pull_request_template.md",
+    "DCO.txt",
+    "GOVERNANCE.md",
     ".github/FUNDING.yml",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
@@ -41,11 +44,16 @@ REQUIRED_GITHUB_FILES = {
     "implementation/python-sdk/README.md",
     "implementation/python-sdk/pyproject.toml",
     "docs/PROVENANCE.md",
+    "spec/README.md",
+    "spec/ORDAVYN-WIRE-V3.md",
+    "spec/CONFORMANCE.md",
     "docs/LOCAL-WIRE-V2.md",
     "release/README.md",
     "tools/audit_dependencies.py",
     "tools/release_candidate.py",
     "tools/verify_candidate.py",
+    "tools/verify_dco.py",
+    "tools/export_release.py",
 }
 README_HEADINGS = (
     "## Why Ordavyn",
@@ -69,6 +77,11 @@ README_LINKS = (
     "release/README.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
+    "GOVERNANCE.md",
+    "DCO.txt",
+    "spec/README.md",
+    "spec/ORDAVYN-WIRE-V3.md",
+    "spec/CONFORMANCE.md",
 )
 VERIFICATION_REQUIREMENTS_INSTALL = '"$ORDAVYN_VENV/bin/python" -m pip install --require-hashes -r release/verification-requirements.txt'
 QUICKSTART_SEQUENCE = (
@@ -93,6 +106,11 @@ PUBLIC_STATUS_FILES = (
     "CONTRIBUTING.md",
     "CHANGELOG.md",
     "SECURITY.md",
+    "GOVERNANCE.md",
+    "DCO.txt",
+    "spec/README.md",
+    "spec/ORDAVYN-WIRE-V3.md",
+    "spec/CONFORMANCE.md",
     "docs/RELEASE-STATUS.md",
     "implementation/Cargo.toml",
     "implementation/README.md",
@@ -130,13 +148,15 @@ ORDINARY_INSTALL_SMOKE = 'smoke_venv="$(mktemp -d "${RUNNER_TEMP}/ordavyn-smoke.
 PYTHON_INTEROP = "python -m pytest -q implementation/python-sdk/tests implementation/tests"
 RUSTFMT_SETUP = "rustup component add rustfmt --toolchain 1.98.1"
 RUST_FORMAT = "cargo +1.98.1 fmt --manifest-path implementation/Cargo.toml --all --check"
+EXPORT_CHECK = "python tools/export_release.py --check"
+DCO_CHECK = 'python tools/verify_dco.py --head "${{ github.event.pull_request.head.sha || github.sha }}"'
 OFFLINE_RUST_COMMANDS = (
     "python -m unittest discover -s tools/tests -v",
     "cargo +1.98.1 test --manifest-path implementation/Cargo.toml --locked --offline",
     "python tools/verify_guides.py --root .",
 )
 EXPECTED_CI_STEPS = [
-    {"uses": CHECKOUT, "with": {"persist-credentials": False}},
+    {"uses": CHECKOUT, "with": {"persist-credentials": False, "fetch-depth": 0}},
     {"uses": SETUP_PYTHON, "with": {"python-version": "3.13.15"}},
     {"name": "Smoke test ordinary source install", "run": ORDINARY_INSTALL_SMOKE},
     {"name": "Install locked verification dependencies", "run": LOCKED_REQUIREMENTS_INSTALL},
@@ -149,6 +169,8 @@ EXPECTED_CI_STEPS = [
     {"name": "Python and interoperability tests", "run": PYTHON_INTEROP},
     {"name": "Rust format", "run": RUST_FORMAT},
     {"name": "Rust tests", "run": "cargo +1.98.1 test --manifest-path implementation/Cargo.toml --locked --offline"},
+    {"name": "Real checkout export composition", "run": EXPORT_CHECK},
+    {"name": "Prospective DCO range", "run": DCO_CHECK},
 ]
 
 
@@ -409,6 +431,7 @@ def verify_github_package(root):
         raise ValueError("github package missing required files: " + ", ".join(missing))
 
     _verify_public_front_door(root)
+    verify_public_spec(root)
 
     for relative in (".github/workflows/ci.yml", ".github/workflows/codeql.yml"):
         _verify_workflow(root, relative)
@@ -428,6 +451,82 @@ def verify_github_package(root):
             raise ValueError(f"SECURITY.md: missing required limitation: {required}")
 
     print("GitHub repository package passed")
+
+
+UNSUPPORTED_DRAFT_01 = {
+    "automatic retries", "CBOR decoder resource-limit enforcement",
+    "CBOR transport decoding", "delegation", "discovery",
+    "exactly-once external effects", "event dispatch and delivery semantics",
+    "HTTP/2 streams and concurrent-stream limits", "mTLS", "negotiation",
+    "post-quantum signatures", "production or remote-deployment profile",
+    "streaming transport", "vendor extension registry",
+}
+
+
+def _spec_rows(root):
+    text=(Path(root)/"spec/CONFORMANCE.md").read_text()
+    pattern = r"^\| \[(ORD-[A-Z0-9-]+)\]\([^|\n]+\) \| (implemented|unsupported) \| (?:(?:`([^`]+)` \| `([^`]+)`)|(?:— \| —)) \|$"
+    return re.findall(pattern,text,re.M)
+
+
+def _selector_exists(root, token):
+    if "::" not in token: return False
+    relative,selector=token.split("::",1);path=Path(root)/relative
+    if not path.is_file(): return False
+    source=path.read_text()
+    if path.suffix == ".py":
+        try: tree=ast.parse(source)
+        except SyntaxError: return False
+        parts=selector.split(".")
+        if len(parts)==1:
+            return parts[0].startswith("test_") and any(
+                isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name==parts[0]
+                for node in tree.body)
+        if len(parts)==2:
+            class_name,method=parts
+            return method.startswith("test_") and any(
+                isinstance(node,ast.ClassDef) and node.name==class_name and any(
+                    isinstance(item,(ast.FunctionDef,ast.AsyncFunctionDef)) and item.name==method
+                    for item in node.body)
+                for node in tree.body)
+        return False
+    if path.suffix == ".rs" and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*",selector):
+        source=re.sub(r"/\*.*?\*/|//[^\n]*","",source,flags=re.S)
+        return re.search(
+            rf"(?m)^\s*#\[(?:tokio::)?test(?:\([^\]]*\))?\]\s*(?:#\[[^\]]+\]\s*)*(?:async\s+)?fn\s+{re.escape(selector)}\s*\(",
+            source,
+        ) is not None
+    return False
+
+
+def conformance_evidence_paths(root):
+    return sorted({token.split("::",1)[0] for _,_,positive,negative in _spec_rows(root) for token in (positive,negative) if token})
+
+
+def verify_public_spec(root):
+    root=Path(root);contract=(root/"spec/ORDAVYN-WIRE-V3.md").read_text()
+    ids=re.findall(r"^#### (ORD-[A-Z0-9-]+)\b",contract,re.M)
+    if not ids or len(ids)!=len(set(ids)): raise ValueError("duplicate or missing normative ID")
+    rows=_spec_rows(root);mapped=[row[0] for row in rows]
+    if len(mapped)!=len(set(mapped)) or set(mapped)!=set(ids):
+        raise ValueError("conformance coverage must map each normative ID exactly once")
+    for requirement,status,positive,negative in rows:
+        if status=="unsupported":
+            if positive or negative: raise ValueError(f"{requirement}: unsupported rows cannot claim evidence")
+            continue
+        if not positive or not negative or positive==negative:
+            raise ValueError(f"{requirement}: positive and negative evidence classes required")
+        for token in (positive,negative):
+            if not _selector_exists(root,token): raise ValueError(f"missing executable selector: {token}")
+    section=(root/"spec/CONFORMANCE.md").read_text().split("## Unsupported inventory — Draft 0.1",1)
+    if len(section)!=2: raise ValueError("missing versioned unsupported inventory")
+    actual={line[2:].strip() for line in section[1].splitlines() if line.startswith("- ")}
+    if actual!=UNSUPPORTED_DRAFT_01: raise ValueError("unsupported inventory drift")
+    for heading in ("## Status and scope","## Data and trust model","## Admission, replay, and lifecycle","## Transport and resource profile","## Evolution, privacy, and evidence"):
+        if heading not in contract: raise ValueError(f"missing normative section: {heading}")
+    public="\n".join((root/path).read_text() for path in ("spec/README.md","spec/ORDAVYN-WIRE-V3.md","spec/CONFORMANCE.md","GOVERNANCE.md","README.md","ROADMAP.md","docs/RELEASE-STATUS.md"))
+    for claim in (r"\bOrdavyn is (?:a )?standard\b",r"\bOrdavyn is production[- ]ready\b",r"\bOrdavyn is security audited\b",r"\bcertified implementation\b"):
+        if re.search(claim,public,re.I): raise ValueError(f"forbidden public claim: {claim}")
 
 
 def guides(root):

@@ -53,3 +53,15 @@ hashes and file modes. These checks establish composition, not independent legal
 clearance or package-release approval. Historical former names remain in unchanged
 commits and private audit evidence. See [dependency evidence](THIRD-PARTY.md) and
 [release blockers](RELEASE-STATUS.md). Existing original archives are unchanged.
+
+## Prospective DCO boundary
+
+DCO 1.1 applies only after baseline
+`1fe370a0b64cbfa5a302c1a6a881f1d99a503c48`. The 34 commits through that baseline
+are unchanged and not claimed as DCO-compliant. Later commits require an
+author-matching sign-off; distinct valid co-sign-offs are allowed, and malformed
+or duplicate sign-off-like trailers fail. CI checks the immutable baseline through
+the proposed descendant head on every run, rather than trusting an event-relative
+range. This process and the temporary
+final-merge strategy are documented in [governance](../GOVERNANCE.md); neither is
+an independent rights or provenance audit.

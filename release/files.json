@@ -53,6 +53,8 @@
       "action": "include",
       "reason": "Public community, security and candidate change guidance"
     },
+    "DCO.txt": {"action": "include", "reason": "Prospective DCO 1.1 terms"},
+    "GOVERNANCE.md": {"action": "include", "reason": "Transparent single-maintainer governance"},
     "LICENSE": {
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
@@ -365,6 +367,9 @@
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
     },
+    "spec/CONFORMANCE.md": {"action": "include", "reason": "Selector-level public conformance evidence"},
+    "spec/ORDAVYN-WIRE-V3.md": {"action": "include", "reason": "Prepared normative Draft 0.1"},
+    "spec/README.md": {"action": "include", "reason": "Prepared specification status and navigation"},
     "tools/audit_dependencies.py": {
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
@@ -373,6 +378,10 @@
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
     },
+    "tools/export_release.py": {"action": "include", "reason": "Real checkout composition validator"},
+    "tools/tests/test_dco.py": {"action": "include", "reason": "Prospective DCO regression tests"},
+    "tools/tests/test_export_release.py": {"action": "include", "reason": "Checkout composition negative tests"},
+    "tools/tests/test_public_spec.py": {"action": "include", "reason": "Normative evidence validator tests"},
     "tools/tests/test_release_candidate.py": {
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
@@ -389,6 +398,7 @@
       "action": "include",
       "reason": "Reproducible local verification runner"
     },
+    "tools/verify_dco.py": {"action": "include", "reason": "Explicit-range prospective DCO validator"},
     "tools/verify_guides.py": {
       "action": "include",
       "reason": "Reproducible local verification runner"

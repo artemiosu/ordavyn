@@ -18,11 +18,11 @@ Exit evidence:
 - repository status and package-release status remain distinct;
 - wire, lifecycle, journal, and threat boundaries are documented together.
 
-## 2. Reviewable protocol specification — not yet
+## 2. Reviewable protocol specification — prepared draft
 
-Move the wire contract from an implementation guide to a versioned, implementation-
-independent specification with precise state machines, error semantics, extension
-rules, and compatibility policy.
+Draft 0.1 is prepared in [spec/](spec/README.md), with stable requirement groups,
+positive/negative evidence selectors, and an unsupported inventory. It has not
+yet been published or independently reviewed, so this gate remains open.
 
 Exit evidence:
 
@@ -68,11 +68,15 @@ Exit evidence:
 - performance and resource-exhaustion characterization;
 - supported release policy and maintained package distribution.
 
-## 6. Open governance and standards consideration — not yet
+## 6. Open governance and standards consideration — single maintainer
 
 Standards work becomes credible only after independent use and review demonstrate
 that the protocol solves a shared problem. Repository ownership alone is not open
 governance.
+
+The current [governance](GOVERNANCE.md) makes single-maintainer decisions and the
+prospective DCO boundary explicit. External final-commit enforcement, additional
+maintainers, and neutral stewardship remain absent.
 
 Exit evidence:
 

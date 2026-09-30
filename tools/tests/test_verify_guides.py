@@ -29,6 +29,12 @@ class GithubPackageTests(unittest.TestCase):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
+        for relative in VERIFY_GUIDES.conformance_evidence_paths(PROJECT_ROOT):
+            source = PROJECT_ROOT / relative
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                shutil.copyfile(source, target)
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -44,6 +50,18 @@ class GithubPackageTests(unittest.TestCase):
     def test_accepts_checked_in_package(self):
         with redirect_stdout(io.StringIO()):
             verify_github_package(self.root)
+
+    def test_accepts_explicit_unsupported_spec_row(self):
+        path=self.root/"spec/CONFORMANCE.md";text=path.read_text();row=VERIFY_GUIDES._spec_rows(self.root)[0]
+        path.write_text(text.replace(f"| implemented | `{row[2]}` | `{row[3]}` |","| unsupported | — | — |",1))
+        with redirect_stdout(io.StringIO()):verify_github_package(self.root)
+
+    def test_rejects_uncollected_spec_selector(self):
+        table=self.root/"spec/CONFORMANCE.md"
+        table.write_text(table.read_text().replace("::test_frozen_vectors","::helper_case",1))
+        evidence=self.root/"implementation/python-sdk/tests/test_interop.py"
+        evidence.write_text(evidence.read_text()+"\ndef helper_case(): pass\n")
+        self.assert_rejected("selector")
 
     def test_checked_in_quickstart_prints_documented_result(self):
         with redirect_stdout(io.StringIO()):

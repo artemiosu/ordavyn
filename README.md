@@ -113,6 +113,12 @@ it is not hermetic. The release evidence workflow uses pinned, hash-checked inpu
 
 ## Documentation
 
+- [Prepared protocol Draft 0.1](spec/README.md) — implementation-independent
+  normative contract awaiting a release checkpoint.
+- [Normative wire-v3 specification](spec/ORDAVYN-WIRE-V3.md) — envelope,
+  canonicalization, admission, replay, result, transport, and limit rules.
+- [Conformance evidence](spec/CONFORMANCE.md) — positive/negative selectors and
+  the versioned unsupported inventory; not certification.
 - [Implementation guide](implementation/README.md) — SDK layout, verification,
   and implemented limits.
 - [Wire v3](docs/LOCAL-WIRE-V3.md) — envelope, signatures, response binding, and
@@ -134,6 +140,10 @@ public specification, independent implementations, a reusable conformance suite,
 demonstrated interoperability, independent security review, and open governance.
 None of those outcomes is implied by this repository. The evidence gates and
 their current state are in [ROADMAP.md](ROADMAP.md).
+
+Current decisions use transparent [single-maintainer governance](GOVERNANCE.md).
+[DCO 1.1](DCO.txt) applies prospectively after the documented baseline; older
+history is not represented as signed off.
 
 ## Verify and contribute
 

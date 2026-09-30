@@ -133,14 +133,14 @@ class SecurityPolicy:
                 or not isinstance(msg.payload, dict) or msg.payload.get('action') != action):
             raise SecurityError('invalid envelope or route')
         if (not isinstance(msg.subject.target_type, str) or not msg.subject.target_type
-                or len(msg.subject.target_type) > 256 or type(msg.timestamp.nanos) is not int
+                or len(msg.subject.target_type.encode('utf-8')) > 256 or type(msg.timestamp.nanos) is not int
                 or not 0 <= msg.timestamp.nanos < 2**64
                 or (msg.subject.closure_version is not None and
                     (type(msg.subject.closure_version) is not int or not 0 <= msg.subject.closure_version < 2**64))):
             raise SecurityError('invalid metadata')
         for ident in (msg.id, msg.operation_id, msg.from_id, msg.to_id, msg.epoch, msg.subject.target_id):
-            if (not isinstance(ident.value, str) or not ident.value or len(ident.value) > 256
-                    or not ident.is_valid() or len(ident.namespace) > 256
+            if (not isinstance(ident.value, str) or not ident.value or len(ident.value.encode('utf-8')) > 256
+                    or not ident.is_valid() or len(ident.namespace.encode('utf-8')) > 256
                     or (ident.version is not None and (type(ident.version) is not int or not 0 <= ident.version < 2**64))):
                 raise SecurityError('invalid identifier')
         with self._lock:
