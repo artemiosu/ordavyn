@@ -19,7 +19,7 @@ distinct valid co-sign-offs are allowed; malformed and duplicate sign-offs fail.
 
 The repository verifier owns that immutable baseline and checks every commit from
 it through the proposed head on every CI run; event-relative ranges are insufficient.
-The head MUST descend from the baseline. The `main` ruleset requires pull requests,
+The head MUST descend from the baseline. The `main` branch protection requires pull requests,
 linear history, rebase integration, and successful repository and CodeQL checks.
 Squash and merge commits are disabled because a platform-generated final commit
 would not be the commit checked for DCO. A release target MUST be a checked commit

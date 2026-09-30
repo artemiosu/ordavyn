@@ -9,7 +9,7 @@ separate public source review from package publication.
 profile. Tagged v0.1.x snapshots are experimental source-only GitHub prereleases,
 not supported package releases. Governance is documented as single-maintainer
 stewardship. DCO 1.1 applies only after
-`1fe370a0b64cbfa5a302c1a6a881f1d99a503c48`. The protected `main` ruleset requires
+`1fe370a0b64cbfa5a302c1a6a881f1d99a503c48`. Protected `main` requires
 linear rebase integration plus successful repository and CodeQL checks; the
 repository verifier checks the fixed baseline through each descendant head.
 
