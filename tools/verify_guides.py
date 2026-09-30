@@ -119,7 +119,7 @@ STALE_REPOSITORY_CLAIMS = (
     re.compile(r"\bno publication(?:\s|,)", re.I),
 )
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
-CHECKOUT = "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
+CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON = "actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c"
 CODEQL = "github/codeql-action/{action}@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
 RUST_FETCH = "cargo +1.98.1 fetch --manifest-path implementation/Cargo.toml --locked --target x86_64-unknown-linux-gnu"
