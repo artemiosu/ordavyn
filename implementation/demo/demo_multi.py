@@ -17,8 +17,10 @@ def main():
     try:
         a = second.client(left_key).send('/status', MessageBuilder(left,right).payload({'action':'status'}).build())
         b = first.client(right_key).send('/status', MessageBuilder(right,left).payload({'action':'status'}).build())
-        assert a.msg_type == b.msg_type == MessageType.RESPONSE
-        assert a.payload == {'service':'right'} and b.payload == {'service':'left'}
+        if a.msg_type != MessageType.RESPONSE or b.msg_type != MessageType.RESPONSE:
+            raise RuntimeError('two-way exchange did not return protocol responses')
+        if a.payload != {'service':'right'} or b.payload != {'service':'left'}:
+            raise RuntimeError('two-way exchange returned unexpected payloads')
         print('Ordavyn two-way service exchange: both authorized requests succeeded')
     finally:
         first.stop(); second.stop()

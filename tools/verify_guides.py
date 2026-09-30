@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
+import tomllib
 
 
 REQUIRED_GITHUB_FILES = {
@@ -22,13 +24,109 @@ REQUIRED_GITHUB_FILES = {
     "CODE_OF_CONDUCT.md",
     "SECURITY.md",
     "CHANGELOG.md",
+    "README.md",
+    "ROADMAP.md",
+    "docs/LOCAL-JOURNAL.md",
+    "docs/LOCAL-LIFECYCLE.md",
+    "docs/LOCAL-THREAT-MODEL.md",
+    "docs/LOCAL-WIRE-V3.md",
+    "docs/RELEASE-STATUS.md",
+    "implementation/Cargo.toml",
+    "implementation/README.md",
+    "implementation/TUTORIAL.md",
+    "implementation/demo/demo_multi.py",
+    "implementation/ordavyn-core/Cargo.toml",
+    "implementation/tests/test_authenticated_exchange.py",
+    "implementation/tests/test_interop.py",
+    "implementation/python-sdk/README.md",
+    "implementation/python-sdk/pyproject.toml",
+    "docs/PROVENANCE.md",
+    "docs/LOCAL-WIRE-V2.md",
+    "release/README.md",
+    "tools/audit_dependencies.py",
+    "tools/release_candidate.py",
+    "tools/verify_candidate.py",
 }
+README_HEADINGS = (
+    "## Why Ordavyn",
+    "## How the exchange works",
+    "## What works today",
+    "## Quickstart from source",
+    "## Documentation",
+    "## Roadmap to an open standard",
+    "## Verify and contribute",
+)
+README_LINKS = (
+    "docs/LOCAL-WIRE-V3.md",
+    "docs/LOCAL-THREAT-MODEL.md",
+    "docs/LOCAL-JOURNAL.md",
+    "docs/LOCAL-LIFECYCLE.md",
+    "docs/RELEASE-STATUS.md",
+    "implementation/TUTORIAL.md",
+    "implementation/tests/test_authenticated_exchange.py",
+    "implementation/tests/test_interop.py",
+    "ROADMAP.md",
+    "release/README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+)
+VERIFICATION_REQUIREMENTS_INSTALL = '"$ORDAVYN_VENV/bin/python" -m pip install --require-hashes -r release/verification-requirements.txt'
+QUICKSTART_SEQUENCE = (
+    "git clone https://github.com/artemiosu/ordavyn.git",
+    "cd ordavyn",
+    'ORDAVYN_VENV="$(mktemp -d "${TMPDIR:-/tmp}/ordavyn-quickstart.XXXXXX")"',
+    'python3 -m venv "$ORDAVYN_VENV"',
+    '"$ORDAVYN_VENV/bin/python" -m pip install ./implementation/python-sdk',
+    '"$ORDAVYN_VENV/bin/python" implementation/demo/demo_multi.py',
+)
+VERIFICATION_SEQUENCE = (
+    VERIFICATION_REQUIREMENTS_INSTALL,
+    "cargo +1.98.1 fetch --manifest-path implementation/Cargo.toml --locked --target x86_64-unknown-linux-gnu",
+    "cargo +1.98.1 build --manifest-path implementation/Cargo.toml --examples --locked --offline",
+    '"$ORDAVYN_VENV/bin/python" -m unittest discover -s tools/tests -v',
+    '"$ORDAVYN_VENV/bin/python" tools/verify_guides.py --root .',
+)
+QUICKSTART_OUTPUT = "Ordavyn two-way service exchange: both authorized requests succeeded"
+PUBLIC_STATUS_FILES = (
+    "README.md",
+    "ROADMAP.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "docs/RELEASE-STATUS.md",
+    "implementation/Cargo.toml",
+    "implementation/README.md",
+    "implementation/python-sdk/README.md",
+    "implementation/python-sdk/pyproject.toml",
+    "docs/LOCAL-JOURNAL.md",
+    "docs/LOCAL-THREAT-MODEL.md",
+    "docs/LOCAL-WIRE-V2.md",
+    "docs/PROVENANCE.md",
+    "release/README.md",
+    "tools/audit_dependencies.py",
+    "tools/release_candidate.py",
+    "tools/verify_candidate.py",
+)
+STALE_REPOSITORY_CLAIMS = (
+    re.compile(r"\bunpublished (?:protocol|repository|project|local candidate)", re.I),
+    re.compile(r"not approved for publication", re.I),
+    re.compile(r"publication is \*\*blocked\*\*", re.I),
+    re.compile(r"publication (?:of this candidate )?is not authorized", re.I),
+    re.compile(r"publication requires a separate decision", re.I),
+    re.compile(r"does not authorize publication", re.I),
+    re.compile(r"publication remains\s+\**blocked", re.I),
+    re.compile(r"['\"]publication['\"]\s*:\s*['\"]blocked['\"]", re.I),
+    re.compile(r"\bno publication(?:\s|,)", re.I),
+)
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 CHECKOUT = "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
 SETUP_PYTHON = "actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c"
 CODEQL = "github/codeql-action/{action}@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
 RUST_FETCH = "cargo +1.98.1 fetch --manifest-path implementation/Cargo.toml --locked --target x86_64-unknown-linux-gnu"
 RUST_EXAMPLES = "cargo +1.98.1 build --manifest-path implementation/Cargo.toml --examples --locked --offline"
+SDK_INSTALL = "python -m pip install --no-deps --no-build-isolation ./implementation/python-sdk"
+LOCKED_REQUIREMENTS_INSTALL = "python -m pip install --require-hashes -r release/verification-requirements.txt"
+ORDINARY_INSTALL_SMOKE = 'smoke_venv="$(mktemp -d "${RUNNER_TEMP}/ordavyn-smoke.XXXXXX")"\npython -m venv "$smoke_venv"\n"$smoke_venv/bin/python" -m pip install ./implementation/python-sdk\n"$smoke_venv/bin/python" implementation/demo/demo_multi.py'
 PYTHON_INTEROP = "python -m pytest -q implementation/python-sdk/tests implementation/tests"
 RUSTFMT_SETUP = "rustup component add rustfmt --toolchain 1.98.1"
 RUST_FORMAT = "cargo +1.98.1 fmt --manifest-path implementation/Cargo.toml --all --check"
@@ -40,7 +138,9 @@ OFFLINE_RUST_COMMANDS = (
 EXPECTED_CI_STEPS = [
     {"uses": CHECKOUT, "with": {"persist-credentials": False}},
     {"uses": SETUP_PYTHON, "with": {"python-version": "3.13.15"}},
-    {"name": "Install locked verification dependencies", "run": "python -m pip install --require-hashes -r release/verification-requirements.txt"},
+    {"name": "Smoke test ordinary source install", "run": ORDINARY_INSTALL_SMOKE},
+    {"name": "Install locked verification dependencies", "run": LOCKED_REQUIREMENTS_INSTALL},
+    {"name": "Install checkout SDK without dependency resolution", "run": SDK_INSTALL},
     {"name": "Install pinned rustfmt", "run": RUSTFMT_SETUP},
     {"name": "Fetch locked Rust dependencies", "run": RUST_FETCH},
     {"name": "Build locked Rust examples", "run": RUST_EXAMPLES},
@@ -92,8 +192,6 @@ def _verify_workflow(root, relative):
     required = {"runs-on", "permissions", "steps"}
     if relative.endswith("codeql.yml"):
         required |= {"strategy"}
-    else:
-        required |= {"env"}
     _keys(relative, f"jobs.{expected_job}", job, required)
     expected_permissions = {"contents": "read"}
     if relative.endswith("codeql.yml"):
@@ -122,6 +220,15 @@ def _verify_workflow(root, relative):
         _fail(relative, f"jobs.{expected_job}.actions", references)
     if relative.endswith("ci.yml"):
         steps = job["steps"]
+        smoke_tests = [index for index, step in enumerate(steps) if step.get("run") == ORDINARY_INSTALL_SMOKE]
+        if len(smoke_tests) != 1:
+            _fail(relative, "ordinary source install smoke test", smoke_tests)
+        locked_installs = [index for index, step in enumerate(steps) if step.get("run") == LOCKED_REQUIREMENTS_INSTALL]
+        if len(locked_installs) != 1:
+            _fail(relative, "locked verification dependency install", locked_installs)
+        sdk_installs = [index for index, step in enumerate(steps) if step.get("run") == SDK_INSTALL]
+        if len(sdk_installs) != 1:
+            _fail(relative, "checkout SDK install", sdk_installs)
         warmups = [index for index, step in enumerate(steps) if step.get("run") == RUST_FETCH]
         if len(warmups) != 1:
             _fail(relative, "locked Rust dependency warm-up", warmups)
@@ -132,6 +239,14 @@ def _verify_workflow(root, relative):
         if any(len(indices) != 1 for indices in offline.values()):
             _fail(relative, "required offline command occurrences", offline)
         offline_indices = [indices[0] for indices in offline.values()]
+        if not smoke_tests[0] < locked_installs[0] < sdk_installs[0] < min(offline_indices):
+            _fail(
+                relative,
+                "source and verification install order",
+                {"smoke": smoke_tests[0], "locked": locked_installs[0], "sdk": sdk_installs[0], "offline": offline},
+            )
+        if sdk_installs[0] >= min(offline_indices):
+            _fail(relative, "checkout SDK install order", {"install": sdk_installs[0], "offline": offline})
         if warmups[0] >= min(offline_indices):
             _fail(relative, "locked Rust dependency warm-up order", {"warm-up": warmups[0], "offline": offline})
         example_builds = [index for index, step in enumerate(steps) if step.get("run") == RUST_EXAMPLES]
@@ -199,12 +314,101 @@ def _verify_issue_forms(root):
         raise ValueError(".github/ISSUE_TEMPLATE/config.yml: unexpected configuration")
 
 
+def _verify_public_front_door(root):
+    readme = (root / "README.md").read_text()
+    for heading in README_HEADINGS:
+        if heading not in readme:
+            raise ValueError(f"README.md: missing required section: {heading}")
+    shell_blocks = [
+        [line.strip() for line in block.splitlines() if line.strip()]
+        for block in re.findall(r"```sh\n(.*?)```", readme, re.S)
+    ]
+    for label, sequence in (("source quickstart", QUICKSTART_SEQUENCE), ("verification setup", VERIFICATION_SEQUENCE)):
+        if not any(
+            all(command in lines for command in sequence)
+            and [lines.index(command) for command in sequence] == sorted(lines.index(command) for command in sequence)
+            for lines in shell_blocks
+        ):
+            raise ValueError(f"README.md: missing or out-of-order {label} shell sequence")
+    if QUICKSTART_OUTPUT not in readme:
+        raise ValueError("README.md: documented quickstart output does not match demo contract")
+    for relative in README_LINKS:
+        if f"]({relative})" not in readme:
+            raise ValueError(f"README.md: missing evidence link: {relative}")
+        if not (root / relative).is_file():
+            raise ValueError(f"README.md: evidence link target is missing: {relative}")
+    for required in (
+        "public experimental repository",
+        "No package has been released to crates.io or PyPI",
+        "not production",
+        "not a standard",
+        "no automatic retries",
+        "exactly-once external effects",
+        "Rust 1.98.1 toolchain",
+    ):
+        if required not in readme:
+            raise ValueError(f"README.md: missing maturity or boundary statement: {required}")
+
+    for relative in PUBLIC_STATUS_FILES:
+        contents = (root / relative).read_text()
+        for pattern in STALE_REPOSITORY_CLAIMS:
+            if pattern.search(contents):
+                raise ValueError(f"{relative}: stale repository-publication claim: {pattern.pattern}")
+
+    release_status = (root / "docs/RELEASE-STATUS.md").read_text()
+    for required in ("source repository is public", "no supported package", "publish = false", "Private :: Do Not Upload"):
+        if required not in release_status:
+            raise ValueError(f"docs/RELEASE-STATUS.md: missing repository/package distinction: {required}")
+
+    cargo = tomllib.loads((root / "implementation/Cargo.toml").read_text())
+    crate = tomllib.loads((root / "implementation/ordavyn-core/Cargo.toml").read_text())
+    python = tomllib.loads((root / "implementation/python-sdk/pyproject.toml").read_text())
+    if "experimental" not in cargo["workspace"]["package"]["description"].lower() or "experimental" not in python["project"]["description"].lower():
+        raise ValueError("package metadata: descriptions must identify the experimental profile")
+    if "Private :: Do Not Upload" not in python["project"].get("classifiers", []):
+        raise ValueError("implementation/python-sdk/pyproject.toml: registry publish block is missing")
+    if crate["package"].get("publish") is not False:
+        raise ValueError("implementation/ordavyn-core/Cargo.toml: registry publish block is missing")
+
+    roadmap = (root / "ROADMAP.md").read_text().lower()
+    for required in (
+        "independent implementations",
+        "conformance suite",
+        "interoperability",
+        "independent security review",
+        "open governance",
+        "not a standard",
+    ):
+        if required not in roadmap:
+            raise ValueError(f"ROADMAP.md: missing evidence gate: {required}")
+
+
+def _run_quickstart_demo(root):
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [sys.executable, str(root / "implementation/demo/demo_multi.py")],
+        cwd=root,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if not lines or lines[-1] != QUICKSTART_OUTPUT:
+        raise ValueError(f"README.md: quickstart output drifted: {result.stdout!r}")
+    print("README source quickstart passed")
+
+
 def verify_github_package(root):
     """Fail closed on missing repository files and unsafe workflow capabilities."""
     root = Path(root)
     missing = sorted(path for path in REQUIRED_GITHUB_FILES if not (root / path).is_file())
     if missing:
         raise ValueError("github package missing required files: " + ", ".join(missing))
+
+    _verify_public_front_door(root)
 
     for relative in (".github/workflows/ci.yml", ".github/workflows/codeql.yml"):
         _verify_workflow(root, relative)
@@ -229,6 +433,7 @@ def verify_github_package(root):
 def guides(root):
     root=Path(root)
     verify_github_package(root)
+    _run_quickstart_demo(root)
     with tempfile.TemporaryDirectory(prefix='ordavyn-guide-') as temp:
         temp=Path(temp)
         for name in ['docs/LOCAL-JOURNAL.md','docs/LOCAL-LIFECYCLE.md','implementation/TUTORIAL.md']:

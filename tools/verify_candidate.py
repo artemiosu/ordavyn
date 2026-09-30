@@ -312,7 +312,7 @@ def run_verification(root,manifest_path,output,wheelhouse,archive=None,repo=None
         run([python,root/'tools/verify_guides.py','--root',root])
     for entry in manifest['files']:
         if sha((root/entry['path']).read_bytes())!=entry['sha256']:raise ValueError('verification mutated source')
-    result={'producer_hashes':producers,'dependency_report':dependency_evidence,'rust_inputs_sha256':sha(rust_path.read_bytes()),'installed_ordavyn':own_installations,'status':'TESTS_PASS','publication':'BLOCKED','source_commit':verified_commit,'source_sha256':verified_sha,'environment_sha256':sha(inventory_path.read_bytes()),'build_inputs_sha256':sha(inputs_path.read_bytes()),'verification_lock_sha256':sha((root/'release/verification-requirements.txt').read_bytes()),'suite_results':suite_results,'python':sys.version,'platform':platform.platform(),'commands':commands,'artifacts':inventories,'wheel_bit_reproducibility':'NOT_CLAIMED'}
+    result={'producer_hashes':producers,'dependency_report':dependency_evidence,'rust_inputs_sha256':sha(rust_path.read_bytes()),'installed_ordavyn':own_installations,'status':'TESTS_PASS','package_release':'BLOCKED','source_commit':verified_commit,'source_sha256':verified_sha,'environment_sha256':sha(inventory_path.read_bytes()),'build_inputs_sha256':sha(inputs_path.read_bytes()),'verification_lock_sha256':sha((root/'release/verification-requirements.txt').read_bytes()),'suite_results':suite_results,'python':sys.version,'platform':platform.platform(),'commands':commands,'artifacts':inventories,'wheel_bit_reproducibility':'NOT_CLAIMED'}
     (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     return result
 

@@ -7,4 +7,4 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["artemiosu"]
-description = "Ordavyn local protocol prototype; not approved for publication"
+description = "Experimental role-neutral protocol for authenticated local exchange"

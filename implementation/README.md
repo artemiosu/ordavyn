@@ -1,7 +1,8 @@
 # Ordavyn implementation
 
-Local prototype, not an approved release. Native Architecture-First describes a
-standalone, role-neutral protocol; the current code implements a small local subset.
+Public experimental implementation with no supported package release. Native
+Architecture-First describes a standalone, role-neutral protocol; the current code
+implements a small loopback subset.
 
 - Rust crate: `ordavyn-core`; Python distribution/import: `ordavyn`.
 - HTTP/1.1 JSON transport on loopback only; route `/ordavyn/v3/<action>` and
@@ -58,10 +59,10 @@ The conformance runner executes behavioral tests and reports unsupported feature
 explicitly; it is not conformance certification. Delegation, negotiation, PQ,
 and exactly-once external effects are unsupported.
 
-The owner selected Apache-2.0 on 2026-09-27; `LICENSE` contains its standard text.
-Rights to inherited material and required attribution still need verification.
-See the repository's `docs/PROVENANCE.md` and `docs/RELEASE-STATUS.md` before any
-publication or redistribution. Private planning is intentionally absent from packages.
+`LICENSE` contains the standard Apache-2.0 text. Rights and required attribution
+remain separate from technical verification. See the repository's
+`docs/PROVENANCE.md` and `docs/RELEASE-STATUS.md` before redistribution. Private
+planning is intentionally absent from packages.
 
 CBOR transport decoding, CBOR decoder resource-limit enforcement and streaming
 transport are unsupported. Rust CBOR depth/collection constants are proposed

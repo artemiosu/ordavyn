@@ -116,8 +116,9 @@ preserves reservations without changing wire v2. Unknown outcomes need applicati
 reconciliation; no exactly-once external effect is promised. Local [revocation, rotation and admission stopping](LOCAL-LIFECYCLE.md) use SDK
 management methods and add no wire fields or HTTP management routes. TLS, signed
 responses, real operations, delegation and negotiation remain unsupported.
-Handlers have no execution timeout. No publication, pre-push change, private-source
-import or public-network operation is authorized by this implementation.
+Handlers have no execution timeout. No package release, pre-push change,
+private-source import or public-network operation is authorized by this
+implementation.
 
 ## Evidence
 

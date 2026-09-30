@@ -11,7 +11,7 @@ Before altering local source materials, 597 files (private context, planning,
 BMAD settings/skills and the inherited legal file) were copied to an external
 originals archive in the predecessor project. SHA-256 checksums are recorded in
 that archive's `SHA256.json`; the local private migration index locates it.
-The archive is outside this repository and excluded from publication. Derived
+The archive is outside this repository and excluded from public release artifacts. Derived
 local documents are marked as such; their previous approvals and claims are
 historical evidence, not fresh approval or certification.
 
@@ -50,6 +50,6 @@ The release tools read exact blobs from a selected reviewed Git commit and omit
 Git history, private planning and external originals. Every tracked path is
 classified in `release/files.json`; artifact inventories record original byte
 hashes and file modes. These checks establish composition, not independent legal
-clearance or a release approval. Historical former names remain in unchanged
+clearance or package-release approval. Historical former names remain in unchanged
 commits and private audit evidence. See [dependency evidence](THIRD-PARTY.md) and
 [release blockers](RELEASE-STATUS.md). Existing original archives are unchanged.

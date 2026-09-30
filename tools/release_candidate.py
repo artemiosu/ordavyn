@@ -175,7 +175,7 @@ def export(root, commit, output):
     manifest['source_sha256'] = sha(archive_path.read_bytes())
     verify_source(archive_path, manifest)
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    (output / 'COMPOSITION-PASS').write_text('Source composition verified. Publication remains BLOCKED.\n')
+    (output / 'COMPOSITION-PASS').write_text('Source composition verified. Package release remains BLOCKED.\n')
     return manifest
 
 

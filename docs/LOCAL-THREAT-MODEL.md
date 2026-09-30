@@ -34,5 +34,5 @@ transactional external-effect rollback, mTLS, discovery, delegation or exactly-o
 
 A compromised trusted process/key, malicious trusted handler, physical journal
 rollback or global DoS remains outside this profile's protection. Test keys and
-certificates are synthetic. No real operations, external deployment, publication,
-remote configuration or pre-push changes are part of this work.
+certificates are synthetic. No real operations, external deployment, package
+release, remote configuration or pre-push changes are part of this work.

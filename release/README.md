@@ -50,7 +50,7 @@ against its manifest. `verify-archive` accepts an expected path→SHA-256 JSON m
 and rejects duplicate/traversal/link/private/key/journal paths, unknown files and
 changed content. Source export additionally records size and executable mode.
 `COMPOSITION-PASS` means source composition only; a successful `result.json` means
-tests passed. Neither marks publication approved. A failed run has no success
+tests passed. Neither approves package or GitHub release publication. A failed run has no success
 result; retain it as evidence and create a new output directory after fixing cause.
 
 The test runner builds Rust tests/release/examples with `--locked --offline`,

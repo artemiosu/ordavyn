@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ordavyn"
 version = "0.1.0"
-description = "Ordavyn local protocol prototype; not approved for publication"
+description = "Experimental role-neutral protocol for authenticated local exchange"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

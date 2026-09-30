@@ -106,8 +106,8 @@ systems. Local [key revocation and bounded stopping](LOCAL-LIFECYCLE.md) preserv
 barriers. Keys and permissions are never stored in this journal; after a process
 restart the application loads current grants separately. Stop/resume of the same
 server retains its grants and replay records. Neither closes the journal; wait for
-a completed stop before closing it. No production approval or publication
-authorization is implied by these features.
+a completed stop before closing it. No production approval or supported package
+release is implied by these features.
 
 See the [authenticated v3 exchange guide](LOCAL-WIRE-V3.md) for explicit TLS 1.3 configuration,
 protocol pins, HTTP test mode without confidentiality and the threat model.

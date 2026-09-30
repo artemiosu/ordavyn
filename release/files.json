@@ -61,6 +61,10 @@
       "action": "include",
       "reason": "Reviewed source, documentation, test, verification input or repository rule"
     },
+    "ROADMAP.md": {
+      "action": "include",
+      "reason": "Public evidence-based maturity gates for the experimental protocol"
+    },
     "SECURITY.md": {
       "action": "include",
       "reason": "Public community, security and candidate change guidance"

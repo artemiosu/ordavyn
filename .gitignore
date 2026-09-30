@@ -33,6 +33,7 @@
 # Unreviewed root source documents stay local, independent of local excludes.
 /*.md
 !/README.md
+!/ROADMAP.md
 !/AGENTS.md
 !/CHANGELOG.md
 !/CODE_OF_CONDUCT.md

@@ -1,11 +1,15 @@
 import json
 import importlib.util
 import io
+import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("verify_guides", PROJECT_ROOT / "tools/verify_guides.py")
@@ -13,6 +17,7 @@ VERIFY_GUIDES = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY_GUIDES)
 REQUIRED_GITHUB_FILES = VERIFY_GUIDES.REQUIRED_GITHUB_FILES
 verify_github_package = VERIFY_GUIDES.verify_github_package
+run_quickstart_demo = VERIFY_GUIDES._run_quickstart_demo
 
 
 class GithubPackageTests(unittest.TestCase):
@@ -39,6 +44,91 @@ class GithubPackageTests(unittest.TestCase):
     def test_accepts_checked_in_package(self):
         with redirect_stdout(io.StringIO()):
             verify_github_package(self.root)
+
+    def test_checked_in_quickstart_prints_documented_result(self):
+        with redirect_stdout(io.StringIO()):
+            run_quickstart_demo(PROJECT_ROOT)
+
+    def test_demo_success_checks_survive_optimized_python(self):
+        environment = os.environ.copy()
+        environment.pop("PYTHONPATH", None)
+        result = subprocess.run(
+            [sys.executable, "-O", str(PROJECT_ROOT / "implementation/demo/demo_multi.py")],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        self.assertEqual(result.stdout.strip().splitlines()[-1], VERIFY_GUIDES.QUICKSTART_OUTPUT)
+
+    def test_quickstart_removes_pythonpath_bypass(self):
+        hostile = self.root / "hostile"
+        package = hostile / "ordavyn"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("raise RuntimeError('PYTHONPATH bypass used')\n")
+        with patch.dict(os.environ, {"PYTHONPATH": str(hostile)}):
+            with redirect_stdout(io.StringIO()):
+                run_quickstart_demo(PROJECT_ROOT)
+
+    def test_rejects_missing_readme_section(self):
+        path = self.root / "README.md"
+        path.write_text(path.read_text().replace("## Why Ordavyn", "## Motivation"))
+        self.assert_rejected("missing required section")
+
+    def test_rejects_missing_readme_evidence_link(self):
+        path = self.root / "README.md"
+        path.write_text(path.read_text().replace("](docs/LOCAL-THREAT-MODEL.md)", "](docs/missing.md)"))
+        self.assert_rejected("missing evidence link")
+
+    def test_rejects_stale_unpublished_repository_claim(self):
+        path = self.root / "CONTRIBUTING.md"
+        path.write_text(path.read_text() + "\nThis is an unpublished protocol.\n")
+        self.assert_rejected("stale repository-publication claim")
+
+    def test_rejects_quickstart_output_drift(self):
+        path = self.root / "README.md"
+        path.write_text(path.read_text().replace(VERIFY_GUIDES.QUICKSTART_OUTPUT, "Unexpected output"))
+        self.assert_rejected("documented quickstart output")
+
+    def test_rejects_missing_pinned_verification_setup(self):
+        path = self.root / "README.md"
+        path.write_text(path.read_text().replace(VERIFY_GUIDES.VERIFICATION_REQUIREMENTS_INSTALL, "python -m pip install pytest"))
+        self.assert_rejected("verification setup shell sequence")
+
+    def test_rejects_out_of_order_quickstart_commands(self):
+        path = self.root / "README.md"
+        contents = path.read_text()
+        first, second = VERIFY_GUIDES.QUICKSTART_SEQUENCE[3:5]
+        path.write_text(contents.replace(first + "\n" + second, second + "\n" + first))
+        self.assert_rejected("source quickstart shell sequence")
+
+    def test_rejects_roadmap_without_independent_implementations(self):
+        path = self.root / "ROADMAP.md"
+        contents = path.read_text().replace("Independent implementations", "Reference implementations")
+        path.write_text(contents.replace("independent implementations", "reference implementations"))
+        self.assert_rejected("independent implementations")
+
+    def test_rejects_removed_registry_publish_block(self):
+        path = self.root / "implementation/ordavyn-core/Cargo.toml"
+        path.write_text(path.read_text().replace("publish = false", "publish = true"))
+        self.assert_rejected("registry publish block")
+
+    def test_rejects_commented_cargo_publish_block(self):
+        path = self.root / "implementation/ordavyn-core/Cargo.toml"
+        path.write_text(path.read_text().replace("publish = false", "# publish = false"))
+        self.assert_rejected("registry publish block")
+
+    def test_rejects_commented_python_publish_classifier(self):
+        path = self.root / "implementation/python-sdk/pyproject.toml"
+        path.write_text(path.read_text().replace('    "Private :: Do Not Upload",', '    # "Private :: Do Not Upload",'))
+        self.assert_rejected("registry publish block")
+
+    def test_rejects_generic_blocked_publication_status(self):
+        path = self.root / "tools/release_candidate.py"
+        path.write_text(path.read_text() + "\n# Publication remains BLOCKED.\n")
+        self.assert_rejected("stale repository-publication claim")
 
     def test_rejects_missing_permissions(self):
         path, data = self.workflow("ci.yml")
@@ -107,82 +197,106 @@ class GithubPackageTests(unittest.TestCase):
         (self.root / "CONTRIBUTING.md").unlink()
         self.assert_rejected("CONTRIBUTING.md")
 
+    def test_rejects_ci_pythonpath_source_bypass(self):
+        path, data = self.workflow("ci.yml")
+        data["jobs"]["verify"]["env"] = {"PYTHONPATH": "implementation/python-sdk"}
+        path.write_text(json.dumps(data))
+        self.assert_rejected("jobs.verify keys")
+
+    def test_rejects_missing_ordinary_source_install_smoke(self):
+        path, data = self.workflow("ci.yml")
+        del data["jobs"]["verify"]["steps"][2]
+        path.write_text(json.dumps(data))
+        self.assert_rejected("ordinary source install smoke test")
+
+    def test_rejects_missing_checkout_sdk_install(self):
+        path, data = self.workflow("ci.yml")
+        del data["jobs"]["verify"]["steps"][4]
+        path.write_text(json.dumps(data))
+        self.assert_rejected("checkout SDK install")
+
+    def test_rejects_checkout_sdk_install_with_dependency_resolution(self):
+        path, data = self.workflow("ci.yml")
+        data["jobs"]["verify"]["steps"][4]["run"] = "python -m pip install ./implementation/python-sdk"
+        path.write_text(json.dumps(data))
+        self.assert_rejected("checkout SDK install")
+
     def test_rejects_rust_warmup_after_offline_suite(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        warmup = steps.pop(4)
-        steps.insert(8, warmup)
+        warmup = steps.pop(6)
+        steps.insert(10, warmup)
         path.write_text(json.dumps(data))
         self.assert_rejected("locked Rust dependency warm-up order")
 
     def test_rejects_rust_warmup_after_repository_checks(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        warmup = steps.pop(4)
-        steps.insert(6, warmup)
+        warmup = steps.pop(6)
+        steps.insert(9, warmup)
         path.write_text(json.dumps(data))
         self.assert_rejected("locked Rust dependency warm-up order")
 
     def test_rejects_missing_rust_warmup(self):
         path, data = self.workflow("ci.yml")
-        del data["jobs"]["verify"]["steps"][4]
+        del data["jobs"]["verify"]["steps"][6]
         path.write_text(json.dumps(data))
         self.assert_rejected("locked Rust dependency warm-up")
 
     def test_rejects_duplicate_rust_warmup(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        steps.insert(5, dict(steps[4]))
+        steps.insert(7, dict(steps[6]))
         path.write_text(json.dumps(data))
         self.assert_rejected("locked Rust dependency warm-up")
 
     def test_rejects_duplicate_offline_command_replacing_other_required_command(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        steps[7]["run"] = steps[10]["run"]
+        steps[9]["run"] = steps[12]["run"]
         path.write_text(json.dumps(data))
         self.assert_rejected("required offline command occurrences")
 
     def test_rejects_missing_rust_examples_build(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        del steps[5]
+        del steps[7]
         path.write_text(json.dumps(data))
         self.assert_rejected("locked offline Rust examples build")
 
     def test_rejects_duplicate_rust_examples_build(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        steps.insert(6, dict(steps[5]))
+        steps.insert(8, dict(steps[7]))
         path.write_text(json.dumps(data))
         self.assert_rejected("locked offline Rust examples build")
 
     def test_rejects_rust_examples_build_after_python_interoperability(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        example_build = steps.pop(5)
-        steps.insert(8, example_build)
+        example_build = steps.pop(7)
+        steps.insert(11, example_build)
         path.write_text(json.dumps(data))
         self.assert_rejected("locked offline Rust examples build order")
 
     def test_rejects_missing_pinned_rustfmt_setup(self):
         path, data = self.workflow("ci.yml")
-        del data["jobs"]["verify"]["steps"][3]
+        del data["jobs"]["verify"]["steps"][5]
         path.write_text(json.dumps(data))
         self.assert_rejected("pinned rustfmt setup")
 
     def test_rejects_duplicate_pinned_rustfmt_setup(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        steps.insert(4, dict(steps[3]))
+        steps.insert(6, dict(steps[5]))
         path.write_text(json.dumps(data))
         self.assert_rejected("pinned rustfmt setup")
 
     def test_rejects_pinned_rustfmt_setup_after_format(self):
         path, data = self.workflow("ci.yml")
         steps = data["jobs"]["verify"]["steps"]
-        setup = steps.pop(3)
-        steps.insert(9, setup)
+        setup = steps.pop(5)
+        steps.insert(12, setup)
         path.write_text(json.dumps(data))
         self.assert_rejected("pinned rustfmt setup order")
 
@@ -194,13 +308,13 @@ class GithubPackageTests(unittest.TestCase):
 
     def test_rejects_disabled_required_ci_step(self):
         path, data = self.workflow("ci.yml")
-        data["jobs"]["verify"]["steps"][6]["if"] = False
+        data["jobs"]["verify"]["steps"][8]["if"] = False
         path.write_text(json.dumps(data))
         self.assert_rejected("reviewed CI steps")
 
     def test_rejects_continue_on_error_required_ci_step(self):
         path, data = self.workflow("ci.yml")
-        data["jobs"]["verify"]["steps"][6]["continue-on-error"] = True
+        data["jobs"]["verify"]["steps"][8]["continue-on-error"] = True
         path.write_text(json.dumps(data))
         self.assert_rejected("reviewed CI steps")
 

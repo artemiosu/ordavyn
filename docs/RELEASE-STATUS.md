@@ -1,8 +1,9 @@
-# Ordavyn local candidate status
+# Ordavyn release status
 
-Publication is **BLOCKED**. Preparation of a verifiable local candidate is not
-permission to publish. Cargo retains `publish = false`, Python retains
-`Private :: Do Not Upload`, and the local pre-push control remains in place.
+The source repository is public and experimental. There is no supported package
+release on crates.io or PyPI, and no production support commitment. Cargo retains
+`publish = false` and Python retains `Private :: Do Not Upload`; these controls
+separate public source review from package publication.
 
 ## Current capabilities
 
@@ -37,9 +38,9 @@ The reviewed candidate's private result records 97 Rust and 55 verification-tool
 tests, plus 249 SDK and 159 recovery/TLS checks for each independent wheel and
 sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
 
-## Remaining decisions and blockers
+## Remaining evidence and package-release gates
 
-- Owner approval for publication and a concrete public release is absent.
+- No concrete crates.io, PyPI, tag, or GitHub Release has been prepared or supported.
 - The unmaintained `rustls-pemfile 2.2.0` wrapper has been removed. The existing
   `rustls-pki-types` dependency now parses PEM without changing the public TLS API.
   RustSec conditions use pinned Rust `semver 1.0.28`; invalid data or helper failure
@@ -59,8 +60,8 @@ sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
   maintainer identity and broader disclosure process require owner decisions.
   GitHub Private Vulnerability Reporting is enabled for sensitive reports, without
   a promised response SLA. No contact identity or commitment is invented.
-  Historical architecture approval and private planning are not evidence that
-  these conditions have been met.
+  Historical architecture decisions are not evidence that these conditions have
+  been met.
 - Secret scans are bounded pattern checks with explicit public test fixtures;
   they are not proof that every possible secret or copied source was detected.
   Historical former names are kept in private reports; history is unchanged.
@@ -82,4 +83,4 @@ source snapshot, and records hashes of the executing verifier modules. Rust buil
 use fresh source extraction from lock-verified archives with an active Linux graph;
 cached source audit compares directly to archive bytes. Installed Ordavyn bytes
 are checked after both wheel and sdist installations. These controls do not
-remove publication blockers or establish hermetic builds.
+establish a supported package release or hermetic builds.

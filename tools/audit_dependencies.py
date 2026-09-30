@@ -205,7 +205,7 @@ def audit(root, output, online=False, download_cargo=False, wheelhouse=None):
     root, output=Path(root).resolve(),Path(output).resolve()
     wheelhouse=Path(wheelhouse).resolve() if wheelhouse is not None else None
     output.mkdir(parents=True,exist_ok=False)
-    report={'date_utc':datetime.now(timezone.utc).isoformat(),'environment':{'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),'rust':'UNKNOWN'},'publication':'BLOCKED','cargo':[],'python':[]}
+    report={'date_utc':datetime.now(timezone.utc).isoformat(),'environment':{'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),'rust':'UNKNOWN'},'package_release':'BLOCKED','cargo':[],'python':[]}
     try: report['environment']['rust']=subprocess.check_output(['rustc','+1.98.1','-Vv']).decode()
     except (OSError,subprocess.CalledProcessError): pass
     producer_names=('tools/audit_dependencies.py','implementation/ordavyn-core/Cargo.toml','implementation/ordavyn-core/examples/audit_semver.rs')
