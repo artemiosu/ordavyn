@@ -127,6 +127,7 @@ PUBLIC_STATUS_FILES = (
 )
 STALE_REPOSITORY_CLAIMS = (
     re.compile(r"\bunpublished (?:protocol|repository|project|local candidate)", re.I),
+    re.compile(r"(?:has\s+)?not\s+yet\s+been\s+published", re.I),
     re.compile(r"not approved for publication", re.I),
     re.compile(r"publication is \*\*blocked\*\*", re.I),
     re.compile(r"publication (?:of this candidate )?is not authorized", re.I),
