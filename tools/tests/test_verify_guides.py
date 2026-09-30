@@ -105,6 +105,11 @@ class GithubPackageTests(unittest.TestCase):
         path.write_text(path.read_text() + "\nThis is an unpublished protocol.\n")
         self.assert_rejected("stale repository-publication claim")
 
+    def test_rejects_stale_not_yet_published_roadmap_claim(self):
+        path = self.root / "ROADMAP.md"
+        path.write_text(path.read_text() + "\nDraft 0.1 has not yet been published.\n")
+        self.assert_rejected("stale repository-publication claim")
+
     def test_rejects_quickstart_output_drift(self):
         path = self.root / "README.md"
         path.write_text(path.read_text().replace(VERIFY_GUIDES.QUICKSTART_OUTPUT, "Unexpected output"))

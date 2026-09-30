@@ -18,11 +18,13 @@ Exit evidence:
 - repository status and package-release status remain distinct;
 - wire, lifecycle, journal, and threat boundaries are documented together.
 
-## 2. Reviewable protocol specification — prepared draft
+## 2. Reviewable protocol specification — published draft
 
-Draft 0.1 is prepared in [spec/](spec/README.md), with stable requirement groups,
-positive/negative evidence selectors, and an unsupported inventory. It has not
-yet been published or independently reviewed, so this gate remains open.
+Draft 0.1 is published in [spec/](spec/README.md) and the source-only
+[v0.1.0 prerelease](https://github.com/artemiosu/ordavyn/releases/tag/v0.1.0),
+with stable requirement groups, positive/negative evidence selectors, and an
+unsupported inventory. Independent review and resolved issue history remain
+absent, so this gate remains open.
 
 Exit evidence:
 

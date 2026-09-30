@@ -19,6 +19,7 @@
 *.log
 *.tar.gz
 *.bundle
+.~lock.*#
 
 .*-private/
 
