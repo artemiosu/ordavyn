@@ -4,6 +4,8 @@ This file records changes in the public experimental repository. It does not ann
 
 ## Unreleased
 
+- Added the public project contact and documented protected, rebase-only `main`
+  integration for source-only GitHub prereleases.
 - Prepared wire-v3 Draft 0.1, selector-level conformance evidence, transparent
   single-maintainer governance, and fixed-baseline-to-head prospective DCO checks
   for review.

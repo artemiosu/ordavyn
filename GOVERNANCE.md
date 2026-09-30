@@ -1,7 +1,8 @@
 # Governance
 
 Ordavyn currently uses transparent single-maintainer stewardship. The maintainer
-is GitHub account [artemiosu](https://github.com/artemiosu). This is not neutral,
+is GitHub account [artemiosu](https://github.com/artemiosu); public project contact
+is [artem@ordavyn.tech](mailto:artem@ordavyn.tech). This is not neutral,
 multi-stakeholder, or open governance, and no response/decision SLA is promised.
 
 Normative changes start with a public proposal describing compatibility,
@@ -18,10 +19,9 @@ distinct valid co-sign-offs are allowed; malformed and duplicate sign-offs fail.
 
 The repository verifier owns that immutable baseline and checks every commit from
 it through the proposed head on every CI run; event-relative ranges are insufficient.
-The head MUST descend from the baseline. Before an external ruleset enforces this
-boundary, maintainers MUST use rebase or fast-forward integration after checking
-the baseline-to-head range. A squash commit MUST itself carry an author-matching
-sign-off and be checked as the final head;
-a platform-generated unsigned merge/squash commit MUST NOT become the release
-target. Enforced final-commit protection remains a release blocker. DCO is not an
-independent legal, provenance, IPR, or patent review.
+The head MUST descend from the baseline. The `main` ruleset requires pull requests,
+linear history, rebase integration, and successful repository and CodeQL checks.
+Squash and merge commits are disabled because a platform-generated final commit
+would not be the commit checked for DCO. A release target MUST be a checked commit
+on protected `main`. DCO is not an independent legal, provenance, IPR, or patent
+review.

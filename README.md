@@ -113,8 +113,8 @@ it is not hermetic. The release evidence workflow uses pinned, hash-checked inpu
 
 ## Documentation
 
-- [Prepared protocol Draft 0.1](spec/README.md) — implementation-independent
-  normative contract awaiting a release checkpoint.
+- [Protocol Draft 0.1](spec/README.md) — implementation-independent normative
+  contract for the experimental local profile.
 - [Normative wire-v3 specification](spec/ORDAVYN-WIRE-V3.md) — envelope,
   canonicalization, admission, replay, result, transport, and limit rules.
 - [Conformance evidence](spec/CONFORMANCE.md) — positive/negative selectors and
@@ -166,4 +166,5 @@ Python/Rust/interoperability suites, artifacts, and remaining limits.
 
 Contribution expectations are in [CONTRIBUTING.md](CONTRIBUTING.md). Use the
 structured issue forms for defects and proposals. Report sensitive findings through
-the process in [SECURITY.md](SECURITY.md); no response SLA is promised.
+the process in [SECURITY.md](SECURITY.md); no response SLA is promised. General
+project contact: [artem@ordavyn.tech](mailto:artem@ordavyn.tech).

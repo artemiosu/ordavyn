@@ -5,12 +5,13 @@ release on crates.io or PyPI, and no production support commitment. Cargo retain
 `publish = false` and Python retains `Private :: Do Not Upload`; these controls
 separate public source review from package publication.
 
-A local [Draft 0.1](../spec/README.md) and conformance map are prepared for the
-implemented profile but are not yet published as a release. Governance is
-documented as single-maintainer stewardship. DCO 1.1 applies only after
-`1fe370a0b64cbfa5a302c1a6a881f1d99a503c48`; external final-commit enforcement
-remains a release blocker. The repository verifier nevertheless checks that fixed
-baseline through a descendant proposed head on every CI run.
+[Draft 0.1](../spec/README.md) and its conformance map document the implemented
+profile. Tagged v0.1.x snapshots are experimental source-only GitHub prereleases,
+not supported package releases. Governance is documented as single-maintainer
+stewardship. DCO 1.1 applies only after
+`1fe370a0b64cbfa5a302c1a6a881f1d99a503c48`. The protected `main` ruleset requires
+linear rebase integration plus successful repository and CodeQL checks; the
+repository verifier checks the fixed baseline through each descendant head.
 
 ## Current capabilities
 
@@ -47,7 +48,8 @@ sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
 
 ## Remaining evidence and package-release gates
 
-- No concrete crates.io, PyPI, tag, or GitHub Release has been prepared or supported.
+- No crates.io or PyPI publication, compiled release asset, or supported package
+  release is provided. GitHub prereleases contain source snapshots only.
 - The unmaintained `rustls-pemfile 2.2.0` wrapper has been removed. The existing
   `rustls-pki-types` dependency now parses PEM without changing the public TLS API.
   RustSec conditions use pinned Rust `semver 1.0.28`; invalid data or helper failure
@@ -63,10 +65,10 @@ sdist installation. Skipped, ignored, filtered or deselected tests are rejected.
 - Registry observations on 2026-09-29 are time-limited: public endpoints returned
   HTTP 404 for `ordavyn` on PyPI and `ordavyn-core` on crates.io. No registration,
   name reservation, domain ownership or trademark right follows from this.
-- Publication/review of the prepared specification, architectural acceptance,
-  additional maintainers, external DCO final-commit enforcement, a reviewed
-  IPR/patent policy, a real identity beyond the GitHub profile, and broader
-  disclosure remain open.
+- Independent review of the specification, architectural acceptance, additional
+  maintainers, a reviewed IPR/patent policy, a real identity beyond the GitHub
+  profile, and broader disclosure remain open. Public project contact is
+  [artem@ordavyn.tech](mailto:artem@ordavyn.tech).
   GitHub Private Vulnerability Reporting is enabled for sensitive reports, without
   a promised response SLA. No contact identity or commitment is invented.
   Historical architecture decisions are not evidence that these conditions have

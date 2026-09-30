@@ -1,9 +1,9 @@
 # Ordavyn protocol specification
 
-This directory contains the **prepared Ordavyn Draft 0.1** contract for the
-experimental local wire-v3 profile. It has not been published as a release. It is
-not a standard, certification, production profile, supported package, or
-independent implementation.
+This directory contains the **Ordavyn Draft 0.1** contract for the experimental
+local wire-v3 profile. Tagged snapshots are source-only GitHub prereleases unless
+explicitly stated otherwise. This is not a standard, certification, production
+profile, supported package, or independent implementation.
 
 - [Normative wire-v3 specification](ORDAVYN-WIRE-V3.md)
 - [Requirement evidence and unsupported inventory](CONFORMANCE.md)
